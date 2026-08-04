@@ -136,3 +136,5 @@ MIT — see [`LICENSE`](LICENSE).
 | Related fleet | [profile](https://github.com/mrodgersjs-web) · [resume](https://github.com/mrodgersjs-web/resume) · [patents teaser](https://github.com/mrodgersjs-web/patents) |
 
 If  fails, the README claim is considered false until fixed.
+
+- Preview: [`assets/demo.gif`](assets/demo.gif)
