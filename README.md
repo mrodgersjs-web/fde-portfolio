@@ -6,6 +6,10 @@
 ![role](https://img.shields.io/badge/role-Forward%20Deployed%20Engineer-0b3d2e)
 ![proof](https://img.shields.io/badge/proof-required-orange)
 
+## Resume
+
+[Mike Rodgers — Forward Deployed Engineer](https://github.com/mrodgersjs-web/resume) ([PDF](https://github.com/mrodgersjs-web/resume/blob/main/Mike-Rodgers-Forward-Deployed-Engineer.pdf))
+
 ## Employer summary
 
 This repository is the **review path** for hiring managers and technical leaders evaluating Forward Deployed / AI Solutions / Applied AI engineering work.
