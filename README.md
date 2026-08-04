@@ -121,3 +121,18 @@ See [`docs/public-boundary.md`](docs/public-boundary.md).
 ## License
 
 MIT — see [`LICENSE`](LICENSE).
+
+
+---
+
+## FDE bar (this studio)
+
+| Practice | Here |
+| --- | --- |
+| Employer summary | top of README |
+| 60s / smoke proof |  |
+| Public boundary |  |
+| Claim under test | '"playbooks + review path present"' |
+| Related fleet | [profile](https://github.com/mrodgersjs-web) · [resume](https://github.com/mrodgersjs-web/resume) · [patents teaser](https://github.com/mrodgersjs-web/patents) |
+
+If  fails, the README claim is considered false until fixed.
