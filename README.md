@@ -1,6 +1,8 @@
 # fde-portfolio
 
 > Customer-facing AI implementation: discover the real workflow, design a bounded system, evaluate it, ship with proof, and hand off operable infrastructure.
+**Outcome:** Portfolio provides an 8-minute review path linking 9 live studios, each with clone-and-run demo proof.
+
 
 ![status](https://img.shields.io/badge/status-public-studio-blue)
 ![role](https://img.shields.io/badge/role-Forward%20Deployed%20Engineer-0b3d2e)
