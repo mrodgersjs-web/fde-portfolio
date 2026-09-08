@@ -68,7 +68,6 @@ workflow reality
 | [communications-studio](https://github.com/mrodgersjs-web/communications-studio) | Gated communication protocol engine |
 | [strategy-studio](https://github.com/mrodgersjs-web/strategy-studio) | Deterministic strategy routing |
 | [doctrine](https://github.com/mrodgersjs-web/doctrine) | Rules agents load before they act |
-| [openwork](https://github.com/mrodgersjs-web/openwork) | Power-user agent workstation |
 
 ## Repository map
 
