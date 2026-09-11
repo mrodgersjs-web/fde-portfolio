@@ -1,0 +1,16 @@
+{
+  "schema": "rig.repo-adapters.v1",
+  "repo": "mrodgersjs-web/fde-portfolio",
+  "tier": "B_PRODUCT_APP",
+  "supabase": {
+    "schema": "rig_shared",
+    "role": "fde-portfolio-agent"
+  },
+  "loops": {
+    "default": "iqrsqpi-v20",
+    "always_on": [
+      "gate-d-loop",
+      "proof-loop"
+    ]
+  }
+}
