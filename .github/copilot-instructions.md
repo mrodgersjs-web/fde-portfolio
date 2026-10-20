@@ -1,30 +1,53 @@
 # Copilot instructions
 
-## Repository purpose
+## What this repo is
 
-`fde-portfolio` is a documentation-first review path for customer-facing AI implementation: discovery, bounded architecture, evaluation, rollout proof, and operable handoff.
+`fde-portfolio` is a Forward Deployed Engineering playbook repository: five
+engagement-phase checklists (`discovery`, `evaluation`, `architecture`,
+`go-live`, `handoff`) shipped as structured YAML, validated against JSON
+Schemas, and rendered to Markdown worksheets by the `fde-portfolio` CLI. The
+checklists are templates with no customer names, no invented outcomes and no
+dollar figures.
 
-## Work map
+## Layout
 
-- `docs/`: discovery, architecture, evaluation, implementation, and public-boundary guidance.
-- `examples/`: audit-log and evaluation-harness examples.
-- `templates/`: customer implementation and go-live checklists.
-- `scripts/`: repository smoke entry point.
-- `assets/`: public visual demonstrations.
-- `graft/`: generated context; read when needed and leave unchanged.
+- `src/fde_portfolio/playbooks/` - the five YAML playbooks, the source of truth.
+- `src/fde_portfolio/schemas/` - `file.schema.json` and `playbook.schema.json`.
+- `src/fde_portfolio/` - package: `loader.py`, `render.py`, `cli.py`.
+- `tests/` - pytest suite: schema, render, CLI, drift scans, repo hygiene.
+- `examples/` - `playbook_demo/run.sh` plus audit-log and eval-harness notes.
+- `docs/` - architecture, customer discovery, evaluation, implementation,
+  public boundary.
+- `scripts/smoke.sh` - legacy file-existence smoke for the docs surface.
+- `.github/workflows/` - `ci.yml` (lint, tests, gate), `smoke.yml`, `rig-lattice.yml`.
 
 ## Commands
 
-No dependency bootstrap or application runtime is required. Test and smoke from the repository root:
+Run from the repository root in a virtual environment:
 
 ```bash
-bash scripts/smoke.sh
+python3 -m venv .venv && source .venv/bin/activate
+pip install -e '.[dev]'   # installs pytest, pytest-cov, ruff, jsonschema
+ruff check .              # lint
+pytest -q                 # full test suite
+pytest -q --cov           # tests with coverage
+fde-portfolio check       # every playbook validates against its schema
+bash scripts/smoke.sh     # smoke
 ```
 
-## Editing rules
+## Conventions
 
-- Keep the portfolio public, actionable, and concise.
-- Ground claims in repository evidence and preserve the discovery-to-handoff sequence.
-- Keep secrets, client PII, prospect lists, auth material, and private monorepo content out.
-- Preserve human approval at real risk boundaries and `docs/public-boundary.md`.
-- Always run the smoke command before claiming done.
+- Conventional commit messages: `feat:`, `fix:`, `test:`, `docs:`, `ci:`, `chore:`.
+- Every behavior change lands with a test that exercises it and passes on a clean install.
+- A new checklist item means editing the matching YAML under
+  `src/fde_portfolio/playbooks/`; the schemas refuse duplicate ids and items that
+  miss `title`, `description`, or `type`.
+- No secrets, client PII, prospect lists, auth material or private monorepo content
+  in any tracked file. No machine paths such as `/Users/...` or `~/Developer/...`.
+- Keep human approval at real risk boundaries, as `docs/public-boundary.md` states.
+
+## Truth rule
+
+Any number in docs, comments, or commit messages must come from a command run in
+this repository, for example a test count from `pytest -q` or an item count from
+`fde-portfolio list`. Quote the command and its output rather than a memory of it.

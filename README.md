@@ -2,7 +2,7 @@
 
 > Structured Forward Deployed Engineering playbook data plus a CLI that renders project checklists for any engagement.
 
-[![ci](https://github.com/mrodgersjs-web/fde-portfolio/actions/workflows/ci.yml/badge.svg)](https://github.com/mrodgersjs-web/fde-portfolio/actions/workflows/ci.yml)
+[![CI](https://img.shields.io/github/actions/workflow/status/mrodgersjs-web/fde-portfolio/ci.yml?branch=main&label=CI)](https://github.com/mrodgersjs-web/fde-portfolio/actions/workflows/ci.yml)
 [![license MIT](https://img.shields.io/badge/license-MIT-0b3d2e)](LICENSE)
 [![python 3.10+](https://img.shields.io/badge/python-3.10%2B-2c5f5f)](pyproject.toml)
 
@@ -103,7 +103,7 @@ problems so a maintainer can fix the data, not the gate.
 | :-- | :-- | :-- |
 | `pip install -e '.[dev]'` | installable from a fresh venv on Python 3.10+ | `pip install -e '.[dev]'` |
 | `ruff check .` | clean on application source | `ruff check .` |
-| `pytest -q --cov` | 40 tests pass, package coverage 85%+ | `pytest -q --cov` |
+| `pytest -q --cov` | 44 tests pass, package coverage 85% | `pytest -q --cov` |
 | `fde-portfolio check` | every playbook validates against the JSON Schema | `fde-portfolio check` |
 | `tests/test_no_client_names_*` | a customer name in any YAML fails the build | `grep` on `playbooks/*.yaml` |
 | `tests/test_no_invented_outcomes_*` | a brag-shaped outcome in any YAML fails the build | `grep` on `playbooks/*.yaml` |
@@ -118,7 +118,7 @@ If a gate cannot fail, it is theater.
 | `src/fde_portfolio/playbooks/` | five YAML playbooks (the source of truth) |
 | `src/fde_portfolio/schemas/` | two JSON Schemas (file + item) |
 | `src/fde_portfolio/py.typed` | type marker for downstream type-checkers |
-| `tests/` | 40 tests covering schema, render, CLI, drift scans |
+| `tests/` | 44 tests covering schema, render, CLI, drift scans, repo hygiene |
 | `docs/architecture.md` | the data contract and lifecycle diagram |
 | `examples/playbook_demo/` | a runnable end-to-end shell demo (no network, no secrets) |
 | `scripts/smoke.sh` | legacy file-existence check the docs/ surface relies on |
@@ -154,4 +154,4 @@ Read [`SECURITY.md`](SECURITY.md). Email
 
 MIT — see [`LICENSE`](LICENSE).
 
-<sub>Built by Mike Rodgers · [rodgersintelligence.com](https://rodgersintelligence.com)</sub>
+<sub>Built by Mike Rodgers · rodgersintelligence.com</sub>
