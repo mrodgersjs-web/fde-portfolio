@@ -6,6 +6,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [0.2.1] - 2026-10-19
 
+- This commit changes the two Markdown headings `render.py` writes from an em dash to a colon, so the CLI output matches the README examples, and adds a test that pins the worksheet heading.
+
 - This commit replaces the four em dashes in README.md with colons or hyphens to match the house style (no em dashes).
 
 ### Added
