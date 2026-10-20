@@ -1,0 +1,77 @@
+schema_version: 1
+id: go-live
+title: Go-live checklist
+purpose: |
+  The last gate before flipping traffic. Every item is a check that
+  must pass on a fresh build, against the customer's environment,
+  with a named owner who can answer "yes" today.
+phase: go-live
+items:
+  - id: eval-suite-green
+    type: task
+    title: Eval suite green on the last merged commit
+    description: |
+      The CI eval pipeline exits green; the failure band is zero.
+      The latest run is recorded with a reproducible artifact
+      (run_id + the commit SHA that produced it).
+    default_owner: platform engineer
+  - id: false-done-plant-red
+    type: task
+    title: The false-done plant remains red
+    description: |
+      The known-failure fixture from the Evaluation playbook still
+      fails the harness. If it has ever gone green, the harness
+      is theater and the rollout pauses.
+    default_owner: platform engineer
+  - id: secrets-not-in-prompt
+    type: task
+    title: Secrets are not in the repo, prompts, or logs
+    description: |
+      Grep the runtime: zero credentials in tracked files, zero
+      secrets captured in any prompt the system constructs, and
+      zero secrets in the captured audit log tail. A leak is
+      release-blocker.
+    default_owner: platform engineer
+  - id: approval-path-tested
+    type: task
+    title: Human approval path exercised end to end
+    description: |
+      Every approval point from the Architecture playbook has been
+      walked through with a real approver in the customer's org.
+      They confirm they can answer the prompt within the latency
+      budget the workflow depends on.
+    default_owner: customer
+  - id: rollback-rehearsed
+    type: task
+    title: Rollback rehearsed against a copy of the production state
+    description: |
+      Run the rollback plan from the Architecture playbook against
+      a sandbox copy of the customer's data. Time it. Record who
+      pulled the trigger and how long the rollback took.
+    default_owner: platform engineer
+  - id: runbook-published
+    type: evidence
+    title: Runbook published where the customer team will look
+    description: |
+      A runbook lives in the customer's wiki, ops dashboard, or
+      wherever the on-call reaches for it. It names every gate, the
+      alert that fires when it goes red, and the contact that owns
+      the page.
+    default_owner: engagement lead
+  - id: on-call-named
+    type: owners
+    title: Customer on-call rotation named
+    description: |
+      Two or more humans at the customer side know the workflow's
+      failure modes and how to roll back. Names (or aliases) live
+      in the runbook, not in private chat.
+    default_owner: customer
+  - id: owner-signed
+    type: decision
+    title: Owner sign-off recorded before traffic is flipped
+    description: |
+      The single named owner signs the go-live decision in writing.
+      "Signed" is a typed approval logged against the deployment
+      record, with a timestamp. A "looks good to me" chat message
+      is not approval.
+    default_owner: engagement lead

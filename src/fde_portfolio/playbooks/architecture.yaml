@@ -1,0 +1,88 @@
+schema_version: 1
+id: architecture
+title: Architecture review playbook
+purpose: |
+  Review the proposed architecture against the customer's constraints
+  before any build. The output of this playbook is one-pager a
+  reviewer can read in five minutes and decide whether the design
+  fits inside the latency, cost, data and approval budgets.
+phase: architecture
+see_also:
+  - docs/architecture.md
+items:
+  - id: data-classes
+    type: evidence
+    title: Enumerate every data class the system will touch
+    description: |
+      For each input or output field, name: the data class (PII,
+      customer-confidential, public, credential, regulated, etc.),
+      where it lives at rest, who can read it, and who can write
+      it. The data classes feed the failure-mode analysis and
+      Handoff's data-residency section.
+    default_owner: platform engineer
+  - id: trust-boundary-diagram
+    type: evidence
+    title: Draw the trust-boundary diagram
+    description: |
+      One page. Boxes are processes (LLM, tool, human, external
+      service). Edges are data flows with permissions in
+      parentheses. Mark every place data crosses a trust boundary.
+      A reviewer should be able to spot the unattended boundaries
+      in five minutes.
+    default_owner: platform engineer
+  - id: deterministic-gates
+    type: task
+    title: List the deterministic gates and their budgets
+    description: |
+      Identify the gates that must run before any agent step:
+      schema validation, allowlists, red-team fixtures, secrets
+      scrubbers. Each gate has a per-run cost budget (in latency
+      and dollars) and a failure mode.
+    default_owner: platform engineer
+  - id: human-approval-points
+    type: decision
+    title: Pin the human approval points
+    description: |
+      For every action that touches an external system, name who
+      approves, what they approve, and how the approval is
+      captured. If the action is "send an email" or "update a
+      ticket", approval must be typed and recorded.
+    default_owner: engagement lead
+  - id: rollback-plan
+    type: evidence
+    title: Document the rollback plan
+    description: |
+      A one-paragraph answer to "the run got 100% wrong and we
+      have to undo it". Which call returns to which version? Who
+      has the button? How is the rollback rehearsed?
+    default_owner: platform engineer
+    see_also:
+      - trust-boundary-diagram
+  - id: audit-log
+    type: task
+    title: Specify the audit log shape
+    description: |
+      Every agent step writes a structured row: tool name, input
+      digest, output digest, who or what triggered it, when,
+      approver if any, and a sha256 chain entry. Rows append-only.
+      The shape is what Handoff hands over to the customer's
+      compliance team.
+    default_owner: platform engineer
+  - id: cost-caps
+    type: question
+    title: Cost-per-run and cost-per-day caps
+    description: |
+      Set per-run and per-day spend caps at the infrastructure
+      layer (model, tool, retrieval). Caps alarm into the customer's
+      observability stack. A runaway run cuts off, it does not
+      leak into the next business day.
+    default_owner: platform engineer
+  - id: secret-handling
+    type: task
+    title: Define how secrets enter and stay in the system
+    description: |
+      Document every credential the workflow needs and where it
+      comes from. The check is strict: zero secrets in repo, zero
+      secrets in prompts, zero secrets in any log line. Anything
+      else is a leak the customer will catch in their own audit.
+    default_owner: platform engineer

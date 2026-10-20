@@ -1,0 +1,77 @@
+schema_version: 1
+id: evaluation
+title: Evaluation plan playbook
+purpose: |
+  Build the eval harness that decides whether the workflow is good
+  enough to ship and stays good enough after a model change.
+  Inputs come from the Discovery playbook's evaluators, latency
+  budgets and success metric; outputs feed the Go-live checklist.
+phase: evaluation
+see_also:
+  - docs/evaluation-strategy.md
+items:
+  - id: regression-set
+    type: evidence
+    title: Build a regression set of historical inputs
+    description: |
+      Seed the eval harness with at least 50 real historical inputs
+      the customer can hand over. Each item carries ground truth
+      (the human-accepted output, the rejected output, or
+      structured labels) so any future model change can be scored
+      against the same inputs.
+    default_owner: platform engineer
+  - id: seed-fixture-source
+    type: evidence
+    title: Document the seed-fixture source and license
+    description: |
+      Record where the seed inputs came from and what license they
+      ship under. This is the audit trail for the eval set; a
+      reviewer will ask.
+    default_owner: engagement lead
+  - id: contract-tests
+    type: task
+    title: Write contract tests for every public function
+    description: |
+      For every public function the workflow invokes (including the
+      tool layer and the agent layer), assert its contract: input
+      shape, output shape, error behaviour, and timing budget. These
+      tests run on every commit and gate every model rollout.
+    default_owner: platform engineer
+  - id: false-done-plant
+    type: task
+    title: Plant a known-failure fixture and prove the harness catches it
+    description: |
+      Introduce a regression the harness MUST fail closed on: a
+      malformed input, a truncated tool call, a context-window
+      overflow. The plant stays in the fixture set; if it ever
+      goes green, the harness is theater.
+    default_owner: platform engineer
+  - id: human-review-sample
+    type: evidence
+    title: Run a human review sample of at least 100 outputs
+    description: |
+      A small panel of the customer's actual end users reviews 100
+      outputs from the candidate build and labels accept / reject /
+      flag. Record the agreement rate; this is the cost the
+      customer will pay before automation.
+    default_owner: customer
+  - id: eval-ci-gate
+    type: task
+    title: Wire the eval harness into CI
+    description: |
+      The harness runs on every PR. Every merge requires the
+      regression-set pass rate to stay within the agreed band and
+      the false-done plant to remain red. This is the only kind of
+      "tests pass" the project accepts as evidence.
+    default_owner: platform engineer
+  - id: metric-baseline
+    type: evidence
+    title: Record the baseline value of the success metric
+    description: |
+      Capture the baseline (pre-build) value of the success metric
+      from Discovery and the early-harness value (the post-build but
+      pre-rollout value). Both numbers travel into Go-live and
+      Handoff.
+    default_owner: engagement lead
+    see_also:
+      - regression-set

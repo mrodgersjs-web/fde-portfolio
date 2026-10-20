@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/mrodgersjs-web/fde-portfolio/schema/file.schema.json",
+  "title": "FDE playbook file",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "id", "title", "purpose", "phase", "items"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]{1,62}$",
+      "description": "Stable kebab-case identifier, used as `fde-portfolio checklist <id>`."
+    },
+    "title": {"type": "string", "minLength": 5, "maxLength": 120},
+    "purpose": {"type": "string", "minLength": 20, "description": "One paragraph on why the playbook exists."},
+    "phase": {
+      "type": "string",
+      "enum": ["discovery", "evaluation", "architecture", "go-live", "handoff"],
+      "description": "Lifecycle phase this playbook supports."
+    },
+    "items": {
+      "type": "array",
+      "minItems": 3,
+      "items": {"$ref": "playbook.schema.json"}
+    },
+    "see_also": {
+      "type": "array",
+      "items": {"type": "string"},
+      "description": "Optional references to docs/ paths or other playbook ids."
+    }
+  }
+}

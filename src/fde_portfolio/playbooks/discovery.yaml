@@ -1,0 +1,91 @@
+schema_version: 1
+id: discovery
+title: Discovery playbook
+purpose: |
+  Turn a vague customer ask into a buildable scope by mapping the
+  real workflow, naming the systems of record, and listing the
+  failure modes the team is already living with. Outputs of this
+  playbook feed the Evaluation, Architecture and Go-live phases
+  below.
+phase: discovery
+see_also:
+  - docs/customer-discovery.md
+items:
+  - id: workflow-step-list
+    type: question
+    title: List the workflow steps as they happen today
+    description: |
+      Capture every step in the customer's current workflow in the
+      order it actually runs, including handoffs and queue waits.
+      Include the steps done by people, by their existing tools
+      (spreadsheets, internal portals), and by anything they already
+      run against an LLM. Do not draw the future state here.
+    default_owner: engagement lead
+    example_response: |
+      <placeholder: "(a) intake -> (b) triage -> (c) drafting -> (d) approval -> (e) publish">
+  - id: owners-per-step
+    type: owners
+    title: Identify the owner role for each step
+    description: |
+      For each step, name the role or team responsible today. Mark
+      steps with no clear owner; those are the seams you will likely
+      have to design across.
+    default_owner: engagement lead
+    see_also:
+      - workflow-step-list
+  - id: failure-modes
+    type: question
+    title: Capture the three worst failure modes today
+    description: |
+      Ask the customer to name the three things that go wrong most
+      often or cost the most when they go wrong. For each, capture
+      what the symptom looks like, what the workaround is, and
+      roughly how often it happens.
+    default_owner: customer
+  - id: systems-of-record
+    type: evidence
+    title: List the systems of record touched by the workflow
+    description: |
+      For each step, name the system that is the source of truth
+      (for example: CRM, ticketing, internal wiki, a model
+      provider's API, a typed datastore). Note read/write perms and
+      any rate limits the customer has hit.
+    default_owner: platform engineer
+  - id: latency-budget
+    type: question
+    title: Capture the latency budget per step
+    description: |
+      For each step, ask what the customer considers slow, normal,
+      and unacceptable. Anchor numbers, not vibes; a "few seconds"
+      budget beats "as fast as possible".
+    default_owner: customer
+  - id: eval-anchors
+    type: evidence
+    title: Find the existing evaluators or quality gates
+    description: |
+      Identify what the customer already uses to decide whether the
+      output of a step is good. Manual review, a regression suite,
+      a heuristic, or just-in-time user feedback all count. These
+      are the anchors you will inherit when you build evals.
+    default_owner: engagement lead
+  - id: scope-cut
+    type: decision
+    title: Decide what is in and what is out
+    description: |
+      List what is in the first build and what is explicitly out of
+      scope. Anything not named "in" defaults to out. Get the
+      decision in writing; it is your scope-creep fence for the
+      rest of the engagement.
+    default_owner: engagement lead
+  - id: success-metric
+    type: question
+    title: Name the success metric in measurable form
+    description: |
+      Define the metric the customer will judge the project on
+      (latency, deflection rate, error rate, throughput, spend,
+      agreement with a human reviewer). State the baseline value
+      and the target. No metric, no go-live.
+    default_owner: customer
+    example_response: |
+      baseline: 41% human review
+      target:    <= 12% human review within 60 days, <= 6% by day 180

@@ -1,0 +1,72 @@
+schema_version: 1
+id: handoff
+title: Handoff runbook
+purpose: |
+  What the customer's team needs to operate the workflow after the
+  engagement ends. If the customer can read this playbook and run
+  the workflow without your team, the engagement is successful.
+phase: handoff
+items:
+  - id: ownership-map
+    type: evidence
+    title: "Ownership map: who runs what after handoff"
+    description: |
+      One page. For every part of the system (model, retrieval
+      index, eval harness, audit log store, alerting), name the
+      owning team at the customer and the route to reach them.
+      The team owners replace you over the runbook's lifetime.
+    default_owner: engagement lead
+  - id: source-and-config
+    type: evidence
+    title: Source, configuration, and secrets handoff
+    description: |
+      The workflow's source lives in the customer's own git host
+      or in a handoff archive under their control. Every config
+      value needed at runtime is in the runbook; every secret is
+      in the customer's secret manager with named readers.
+    default_owner: platform engineer
+  - id: eval-handoff
+    type: task
+    title: Eval harness runs in the customer's CI without your team
+    description: |
+      The eval harness from Evaluation runs in the customer's CI
+      on every merge, without hitting your team's CI or your
+      team's account. A reviewer at the customer owns the green.
+    default_owner: platform engineer
+  - id: audit-log-retention
+    type: question
+    title: Audit log retention and access reviewed
+    description: |
+      Confirm how long the customer's compliance team needs the
+      audit log, who can read it, and how to export it at the end
+      of retention. Default answer: as long as the customer's
+      regulated workflow demands, not longer.
+    default_owner: customer
+  - id: model-portability
+    type: task
+    title: Model-portability rehearsal recorded
+    description: |
+      Walk the customer's team through swapping the current model
+      for a different one. Record the run book update, the eval
+      results, and the time the swap took. A port that has never
+      been rehearsed is not portable.
+    default_owner: platform engineer
+  - id: training-material
+    type: evidence
+    title: Training material the customer can actually run
+    description: |
+      A recorded walkthrough of the workflow as the customer uses
+      it, the runbook as it lives today, and a worked-example eval
+      run that the on-call can replay. No "watch this video"
+      links; the materials live in the customer's own wiki.
+    default_owner: engagement lead
+  - id: engagement-close
+    type: decision
+    title: Engagement closure signed off in writing
+    description: |
+      The customer signs off on the handoff in writing. The
+      signed record names what was delivered, the metrics that
+      were moved from baseline to target, and the things left
+      out of scope. The engagement is not "done" until this row
+      exists.
+    default_owner: engagement lead

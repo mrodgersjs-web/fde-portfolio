@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/mrodgersjs-web/fde-portfolio/schema/playbook.schema.json",
+  "title": "FDE playbook item",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "title", "description", "type"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]{1,62}$",
+      "description": "Stable kebab-case identifier used in checklists and CLI flags."
+    },
+    "title": {
+      "type": "string",
+      "minLength": 5,
+      "maxLength": 120,
+      "description": "Human-readable title; the only field guaranteed to survive a rename."
+    },
+    "description": {
+      "type": "string",
+      "minLength": 10,
+      "description": "Plain-English description of what this item is and why it exists."
+    },
+    "type": {
+      "type": "string",
+      "enum": ["question", "task", "decision", "evidence", "owners"],
+      "description": "Item kind; 'question' prompts discovery input, 'task' is a checklist item, 'decision' records a sign-off, 'evidence' is an artifact to attach, 'owners' names a human."
+    },
+    "default_owner": {
+      "type": "string",
+      "description": "Suggested role/team to own this item, lowercase.",
+      "examples": ["engagement lead", "platform engineer", "customer"]
+    },
+    "example_response": {
+      "type": "string",
+      "description": "Optional short example of a complete response, used only as a placeholder pattern, never a real customer statement."
+    },
+    "see_also": {
+      "type": "array",
+      "items": {"type": "string"},
+      "description": "Optional cross-references to other items (by id) or to documents (by relative path)."
+    }
+  }
+}

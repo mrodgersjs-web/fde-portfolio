@@ -1,141 +1,157 @@
 # fde-portfolio
 
-> Customer-facing AI implementation: discover the real workflow, design a bounded system, evaluate it, ship with proof, and hand off operable infrastructure.
-**Outcome:** Portfolio provides an 8-minute review path linking 9 live studios, each with clone-and-run demo proof.
+> Structured Forward Deployed Engineering playbook data plus a CLI that renders project checklists for any engagement.
 
+[![ci](https://github.com/mrodgersjs-web/fde-portfolio/actions/workflows/ci.yml/badge.svg)](https://github.com/mrodgersjs-web/fde-portfolio/actions/workflows/ci.yml)
+[![license MIT](https://img.shields.io/badge/license-MIT-0b3d2e)](LICENSE)
+[![python 3.10+](https://img.shields.io/badge/python-3.10%2B-2c5f5f)](pyproject.toml)
 
-![status](https://img.shields.io/badge/status-public-studio-blue)
-![role](https://img.shields.io/badge/role-Forward%20Deployed%20Engineer-0b3d2e)
-![proof](https://img.shields.io/badge/proof-required-orange)
-
-## Resume
-
-[Mike Rodgers — Forward Deployed Engineer](https://github.com/mrodgersjs-web/resume) ([PDF](https://github.com/mrodgersjs-web/resume/blob/main/Mike-Rodgers-Forward-Deployed-Engineer.pdf))
-
-## Employer summary
-
-This repository is the **review path** for hiring managers and technical leaders evaluating Forward Deployed / AI Solutions / Applied AI engineering work.
-
-It is not a dump of experiments. It shows the operating layer that decides whether an AI workflow survives production: requirements, context boundaries, evals, auditability, rollout, and customer handoff.
-
-**Screening question answered here:**  
-*Can this person turn an ambiguous AI mandate into a supportable deployment with evidence?*
-
-### 8-minute review path
-
-1. This README  
-2. [`docs/implementation-playbook.md`](docs/implementation-playbook.md)  
-3. [`docs/architecture.md`](docs/architecture.md)  
-4. [`docs/evaluation-strategy.md`](docs/evaluation-strategy.md)  
-5. [`docs/customer-discovery.md`](docs/customer-discovery.md)  
-6. [`docs/public-boundary.md`](docs/public-boundary.md)  
-7. Live studios linked below — clone one and run a demo  
+Five engagement-phase playbooks (`discovery`, `evaluation`, `architecture`,
+`go-live`, `handoff`) ship as structured YAML, validated against a JSON
+Schema, and rendered to Markdown by the `fde-portfolio` CLI. The
+checklists are templates: no customer names, no invented outcomes, no
+dollar figures.
 
 ## Why this exists
 
-Most AI projects do not fail because a model cannot produce text.  
-They fail because the implementation never becomes trustworthy inside the customer workflow.
+Forward Deployed Engineering usually loses on the boring layer between
+the demo and production: the operator forgets one approval step, the
+handoff doc names no owner, the eval set is shipped without a
+known-failure fixture. This repo is the boring layer — five short
+playbooks plus a CLI that turns them into a real worksheet, plus tests
+that refuse to ship a checklist with a customer name in it.
 
-This portfolio encodes the implementation layer I care about:
+## Quick start (5 lines)
 
-- translating messy business context into usable system boundaries  
-- designing agentic workflows with human approval and rollback  
-- building eval loops that catch regressions before users do  
-- making outputs inspectable with audit logs and provenance  
-- turning one-off delivery into reusable templates and tools  
-
-## Reference loop
-
-```text
-workflow reality
-   → bound context / tools / memory / policy
-   → deterministic gates
-   → agent steps (earned autonomy)
-   → eval harness + human approval
-   → ProofPacket / audit log
-   → operable handoff
+```sh
+git clone https://github.com/mrodgersjs-web/fde-portfolio.git
+cd fde-portfolio
+python3 -m venv .venv && source .venv/bin/activate
+pip install -e '.[dev]'
+fde-portfolio build --project "Acme AI intake" --out /tmp/worksheet.md
 ```
 
-## Live system surface (this GitHub)
+## Usage
 
-| Studio | What it proves |
-| --- | --- |
-| [proof-studio](https://github.com/mrodgersjs-web/proof-studio) | Signed completion claims; false-done catch |
-| [jake-studio](https://github.com/mrodgersjs-web/jake-studio) | Operator OS + L10 harness + closed loops |
-| [mesh-studio](https://github.com/mrodgersjs-web/mesh-studio) | Multi-node subsystem probe / boot / recover |
-| [agency-studio](https://github.com/mrodgersjs-web/agency-studio) | Role contracts — Builder ≠ Verifier |
-| [app-factory-studio](https://github.com/mrodgersjs-web/app-factory-studio) | Spec → scaffold with definition-of-done chain |
-| [communications-studio](https://github.com/mrodgersjs-web/communications-studio) | Gated communication protocol engine |
-| [strategy-studio](https://github.com/mrodgersjs-web/strategy-studio) | Deterministic strategy routing |
-| [doctrine](https://github.com/mrodgersjs-web/doctrine) | Rules agents load before they act |
+List bundled playbooks:
 
-## Repository map
+```
+$ fde-portfolio list
+id             items  title
+-------------- -----  --------------------------------------------------
+discovery          8  Discovery playbook
+evaluation         7  Evaluation plan playbook
+architecture       8  Architecture review playbook
+go-live            8  Go-live checklist
+handoff            7  Handoff runbook
+```
+
+Validate every playbook against the JSON Schema:
+
+```
+$ fde-portfolio check
+discovery: valid (8 items)
+evaluation: valid (7 items)
+architecture: valid (8 items)
+go-live: valid (8 items)
+handoff: valid (7 items)
+```
+
+Render the full project worksheet for one engagement:
+
+```
+$ fde-portfolio build --project "Acme AI intake"
+# Acme AI intake — Forward Deployed Engineering worksheet
+
+Generated by `fde-portfolio` from the bundled playbook data. ...
+
+## Phases
+
+- **Discovery playbook** (8 items)
+- **Evaluation plan playbook** (7 items)
+- **Architecture review playbook** (8 items)
+- **Go-live checklist** (8 items)
+- **Handoff runbook** (7 items)
+
+---
+
+# Discovery playbook — Acme AI intake
+...
+```
+
+## How it works
+
+```mermaid
+flowchart LR
+    Y1[discovery.yaml] & Y2[evaluation.yaml] & Y3[architecture.yaml] & Y4[go-live.yaml] & Y5[handoff.yaml]
+    --> Schema[file.schema.json + playbook.schema.json]
+    --> Loader[loader.py: load + validate]
+    --> Render[render.py: Markdown checklist]
+    --> CLI[cli.py: list / check / checklist / build]
+    --> Out[stdout or --out file]
+```
+
+Every YAML file declares `id`, `phase`, `items[]`; every item
+declares `id`, `title`, `description`, `type` (one of `question`,
+`task`, `decision`, `evidence`, `owners`). `loader.py` enforces
+both schemas and `validate_playbook` returns a list of one-line
+problems so a maintainer can fix the data, not the gate.
+
+## What it proves
+
+| Gate | Outcome | Recent run |
+| :-- | :-- | :-- |
+| `pip install -e '.[dev]'` | installable from a fresh venv on Python 3.10+ | `pip install -e '.[dev]'` |
+| `ruff check .` | clean on application source | `ruff check .` |
+| `pytest -q --cov` | 40 tests pass, package coverage 85%+ | `pytest -q --cov` |
+| `fde-portfolio check` | every playbook validates against the JSON Schema | `fde-portfolio check` |
+| `tests/test_no_client_names_*` | a customer name in any YAML fails the build | `grep` on `playbooks/*.yaml` |
+| `tests/test_no_invented_outcomes_*` | a brag-shaped outcome in any YAML fails the build | `grep` on `playbooks/*.yaml` |
+
+If a gate cannot fail, it is theater.
+
+## Project layout
 
 | Path | What it shows |
-| --- | --- |
-| [`docs/implementation-playbook.md`](docs/implementation-playbook.md) | Discovery → go-live phases |
-| [`docs/architecture.md`](docs/architecture.md) | Reference architecture for grounded AI workflows |
-| [`docs/evaluation-strategy.md`](docs/evaluation-strategy.md) | Contract tests, workflow evals, false-done plants |
-| [`docs/customer-discovery.md`](docs/customer-discovery.md) | Questions that turn vague asks into buildable scope |
-| [`docs/public-boundary.md`](docs/public-boundary.md) | What is intentionally excluded from public surfaces |
-| [`templates/customer-implementation-plan.md`](templates/customer-implementation-plan.md) | Reusable engagement plan skeleton |
-| [`templates/go-live-checklist.md`](templates/go-live-checklist.md) | Practical go-live checklist |
-| [`examples/audit-log/`](examples/audit-log/) | Audit log pattern notes |
-| [`examples/eval-harness/`](examples/eval-harness/) | Eval harness pattern notes |
+| :-- | :-- |
+| `src/fde_portfolio/` | installable package: loader, renderer, CLI |
+| `src/fde_portfolio/playbooks/` | five YAML playbooks (the source of truth) |
+| `src/fde_portfolio/schemas/` | two JSON Schemas (file + item) |
+| `src/fde_portfolio/py.typed` | type marker for downstream type-checkers |
+| `tests/` | 40 tests covering schema, render, CLI, drift scans |
+| `docs/architecture.md` | the data contract and lifecycle diagram |
+| `examples/playbook_demo/` | a runnable end-to-end shell demo (no network, no secrets) |
+| `scripts/smoke.sh` | legacy file-existence check the docs/ surface relies on |
+| `LICENSE` | MIT |
+| `.github/workflows/ci.yml` | matrix Python 3.10/3.12; install, lint, tests, gate, smoke |
 
-## 60-second adjacent proof
+## Development
 
-This repo is documentation-first. The fastest executable proof on the account:
-
-```bash
-git clone https://github.com/mrodgersjs-web/proof-studio.git
-cd proof-studio/packages/rigforge
+```sh
 python3 -m venv .venv && source .venv/bin/activate
-pip install -e .
-rigforge demo
+pip install -e '.[dev]'
+ruff check .
+pytest -q
+fde-portfolio check
 ```
 
-## Operating principles
+Add a new checklist item by editing the matching YAML file under
+`src/fde_portfolio/playbooks/`. The schemas refuse duplicate ids and
+items that miss `title`, `description`, or `type`. `fde-portfolio
+check` exits non-zero on any schema violation; the no-client-name and
+no-invented-outcome scans run as part of `pytest -q`.
 
-1. Outcome first.  
-2. Ground everything.  
-3. Evals before scale.  
-4. Human approval where risk is real.  
-5. Auditability is product quality.  
-6. Smallest useful loop, then harden.  
+## Contributing
 
-## Public boundary
+Read [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
-No customer PII, prospect lists, auth cookies, ToS-risk engagement automation, or internal client monorepos.  
-See [`docs/public-boundary.md`](docs/public-boundary.md).
+## Security
 
-## Video walkthrough
-
-- Script: [`docs/video-script.md`](docs/video-script.md)  
-- Recording: `assets/demo.mp4` (pending render)  
-
-## Related
-
-- Profile: [mrodgersjs-web](https://github.com/mrodgersjs-web)  
-- [proof-studio](https://github.com/mrodgersjs-web/proof-studio) · [jake-studio](https://github.com/mrodgersjs-web/jake-studio) · [doctrine](https://github.com/mrodgersjs-web/doctrine)  
+Read [`SECURITY.md`](SECURITY.md). Email
+**security@rodgersintelligence.com** for private disclosures.
 
 ## License
 
 MIT — see [`LICENSE`](LICENSE).
 
-
----
-
-## FDE bar (this studio)
-
-| Practice | Here |
-| --- | --- |
-| Employer summary | top of README |
-| 60s / smoke proof |  |
-| Public boundary |  |
-| Claim under test | '"playbooks + review path present"' |
-| Related fleet | [profile](https://github.com/mrodgersjs-web) · [resume](https://github.com/mrodgersjs-web/resume) · [patents teaser](https://github.com/mrodgersjs-web/patents) |
-
-If  fails, the README claim is considered false until fixed.
-
-- Preview: [`assets/demo.gif`](assets/demo.gif)
+<sub>Built by Mike Rodgers · [rodgersintelligence.com](https://rodgersintelligence.com)</sub>

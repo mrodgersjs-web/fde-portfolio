@@ -1,0 +1,68 @@
+name: "Bug report"
+description: "Reproduce a behavior we should not ship."
+title: "[bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for filing a bug. Please fill in the section below so a
+        maintainer can reproduce on a fresh clone.
+
+  - type: input
+    id: version
+    attributes:
+      label: "fde-portfolio version"
+      description: "The version in pyproject.toml."
+      placeholder: "0.2.0"
+    validations:
+      required: true
+
+  - type: input
+    id: python
+    attributes:
+      label: "Python version"
+      description: "Output of `python3 --version`."
+      placeholder: "3.12.3"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: command
+    attributes:
+      label: "Command that misbehaved"
+      options:
+        - "fde-portfolio list"
+        - "fde-portfolio check"
+        - "fde-portfolio checklist"
+        - "fde-portfolio build"
+        - "other"
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: "Reproduce"
+      description: "Exact commands and inputs."
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: observed
+    attributes:
+      label: "Observed"
+      description: "What actually happens. Paste the literal output."
+      render: text
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: "Expected"
+      description: "What you expected to happen instead."
+      render: text
+    validations:
+      required: true
