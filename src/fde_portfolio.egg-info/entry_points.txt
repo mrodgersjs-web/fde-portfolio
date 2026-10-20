@@ -1,2 +1,0 @@
-[console_scripts]
-fde-portfolio = fde_portfolio.cli:main
