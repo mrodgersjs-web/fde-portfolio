@@ -6,6 +6,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [0.2.1] - 2026-10-19
 
+- This commit replaces the four em dashes in README.md with colons or hyphens to match the house style (no em dashes).
+
 ### Added
 
 - `tests/test_repo_hygiene.py`: 4 checks read from the files on disk that
