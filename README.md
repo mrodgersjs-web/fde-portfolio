@@ -21,6 +21,21 @@ known-failure fixture. This repo is the boring layer: five short
 playbooks plus a CLI that turns them into a real worksheet, plus tests
 that refuse to ship a checklist with a customer name in it.
 
+## The operating record
+
+The playbooks above are the method; [CASE-STUDIES.md](CASE-STUDIES.md) is
+the field record: six dated operations on a 366-repo private AI fleet
+(storage integrity with hash-gated deletion, a 66-image container migration
+with preserved rollback, tri-GPU Blackwell serving restores behind idle
+gates, fleet-wide model-routing reconciliation, an MCP process-leak
+lifecycle fix). Every case names its evidence tier and carries a not-proven
+line, because a playbook without failure modes is marketing. The case set
+was gated by an independent 2026-10-30 inventory audit that issued six
+required corrections before publication.
+
+How the claims are verified: [AI-ENGINEERING-WORKFLOW.md](AI-ENGINEERING-WORKFLOW.md).
+Where each capability lives: [SKILLS-MATRIX.md](SKILLS-MATRIX.md).
+
 ## Quick start (5 lines)
 
 ```sh
