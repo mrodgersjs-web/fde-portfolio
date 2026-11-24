@@ -1,0 +1,758 @@
+# Blueprint: fde-portfolio field record (brownfield, single-file mode)
+
+Project slug: `fde-field-record`. Repository: `mrodgersjs-web/fde-portfolio`. Branch
+`aside/tier2-portfolio-20261123`, base commit `15cba0fbc6bf08dfabd060b1ab1e97d0512d22ba` (`15cba0f`,
+`origin/main` on 2026-11-23). Template: the-architect `blueprint-template.md`, 20 numbered sections.
+Every command runs from the repository root. This file is committed to the repository, so it names no
+local machine path and no private document path.
+
+## 1. Project Overview & Non-Goals
+
+### Vision
+`fde-portfolio` is a public Forward Deployed Engineering repository: five YAML engagement playbooks,
+two JSON Schemas and a CLI that renders a worksheet. It shows a checklist engine and no deployment
+evidence. This change adds a labeled field record of confirmed deployments (sector pseudonyms only),
+one clearly SYNTHETIC worked engagement whose eval numbers come from running code in the repo, a
+failure taxonomy, three ADRs and a runbook, and reorders the README so evidence comes first.
+
+### Current state
+- Package `src/fde_portfolio/` (`cli.py`, `loader.py`, `render.py`, `playbooks/*.yaml`,
+  `schemas/*.json`); console script `fde-portfolio = fde_portfolio.cli:main`.
+- Tests `tests/test_cli.py`, `tests/test_playbooks.py`, `tests/test_render_headings.py`,
+  `tests/test_repo_hygiene.py`; `pytest -q` exits 0 with 0 failed on the base commit.
+- Docs under `docs/`; `CASE-STUDIES.md` holds six fleet operations; README line 27 carries a stale
+  repository census count.
+- CI `.github/workflows/ci.yml` (ruff, pytest, `fde-portfolio check`, `scripts/smoke.sh`), `smoke.yml`,
+  `rig-lattice.yml`. Runtime deps PyYAML, jsonschema; dev deps pytest, pytest-cov, ruff.
+
+### Target state
+- `CLAUDE.md` (commands first) and explicit `blueprints` exclusions in `pyproject.toml`.
+- `docs/worked-engagement/`: `README.md`, `eval-set.jsonl`, `scorer.py`, `systems.py`, `run_eval.py`,
+  and the runner's outputs `runs/baseline.json`, `runs/improved.json`.
+- `docs/field-record.md`, `docs/failure-taxonomy.md`, `docs/runbook.md`,
+  `docs/adr/0001-deterministic-offline-eval.md`, `docs/adr/0002-confidence-gate-abstain-to-human.md`,
+  `docs/adr/0003-claim-labels-and-pseudonyms.md`.
+- README order: field record, worked engagement, checklist CLI; no repository count; no image line
+  (the owner inserts media under the H1 in a later commit).
+- New tests `tests/test_scorer.py`, `tests/test_systems.py`, `tests/test_field_record.py`,
+  `tests/test_docs.py`.
+
+### Delta
+Additive docs and stdlib-only Python under `docs/worked-engagement/`; four new test files; README
+reorder; `scripts/smoke.sh` requires three more docs; two config lines in `pyproject.toml`. No change
+to `src/`.
+
+### Users
+| Persona | What they come to do | Frequency |
+|---|---|---|
+| Hiring manager for an FDE role | judge field impact and eval discipline in five minutes | once |
+| Technical interviewer | rerun the worked engagement and question the ADRs | once |
+| Maintainer | update a field-record fact after it is confirmed | monthly |
+
+### Goals — v1 scope
+1. A field record whose every public claim is a `[confirmed]` corpus fact, with real gaps listed under "Not yet evidenced".
+2. A reproducible synthetic eval: one command regenerates byte-identical baseline and improved runs.
+3. Decision, failure and operations docs an interviewer can question.
+4. A README that leads with evidence.
+
+### Non-Goals — explicitly out of scope for v1
+| Not building | Why not now | Revisit when |
+|---|---|---|
+| Real customer or employer names, or logos | public boundary: sector pseudonyms only | a client gives written approval |
+| Any compensation, rate or dollar figure | never published here | never |
+| Any image line or media file | the owner adds media under the H1 in a later commit | that commit |
+| Changes to `src/fde_portfolio/`, the CLI, playbooks or schemas | held constant (§5) | a separate blueprint |
+| New runtime or dev dependencies | the eval code is stdlib only | an eval needs a model call |
+| Push, remote tag, release or pull request | Gate-D: Mike's exact-text approval | Mike approves |
+| An LLM inside the worked engagement | numbers must reproduce offline, byte for byte | a model-backed variant is scoped |
+| Any portrait or likeness of Mike Rodgers | standing policy | never |
+
+The builder must not implement anything in this table.
+
+### Success metrics
+| Metric | Target | How measured |
+|---|---|---|
+| Field-record numbers off the allowlist | 0 on 2026-11-23 | `tests/test_field_record.py` |
+| Eval reproducibility | both runs byte-identical on rerun | step 5 Verify |
+| Suite | 0 failed | `/tmp/fde-py312/bin/python -m pytest -q` |
+
+## 2. Tech Stack
+| Layer | Choice | Why |
+|---|---|---|
+| Language | Python 3.12 in a build venv at `/tmp/fde-py312` (package supports 3.10+); the repo's own `.venv` is never used or modified | existing package |
+| Env tool | `uv` 0.13.1 observed on the build machine | creates `/tmp/fde-py312` |
+| Eval code | Python standard library (`json`, `re`, `pathlib`) | no new deps |
+| Tests | pytest (existing dev dep) | existing suite |
+| Lint | ruff (existing dev dep) | existing gate |
+
+## 3. Directory Structure
+```
+fde-portfolio/
+├── CLAUDE.md                                   # step 1
+├── pyproject.toml                              # step 1 (two exclusion lines)
+├── README.md                                   # step 10
+├── scripts/smoke.sh                            # step 10
+├── blueprints/fde-field-record-blueprint.md    # this file
+├── docs/
+│   ├── field-record.md                         # step 7
+│   ├── failure-taxonomy.md                     # step 8
+│   ├── runbook.md                              # step 8
+│   ├── adr/0001-deterministic-offline-eval.md          # step 9
+│   ├── adr/0002-confidence-gate-abstain-to-human.md    # step 9
+│   ├── adr/0003-claim-labels-and-pseudonyms.md         # step 9
+│   └── worked-engagement/
+│       ├── eval-set.jsonl                      # step 2
+│       ├── scorer.py                           # steps 2-3
+│       ├── systems.py                          # step 4
+│       ├── run_eval.py                         # step 5
+│       ├── runs/baseline.json                  # written by run_eval.py, step 5
+│       ├── runs/improved.json                  # written by run_eval.py, step 5
+│       └── README.md                           # step 6
+└── tests/
+    ├── test_scorer.py                          # steps 2-3
+    ├── test_systems.py                         # steps 4-5
+    ├── test_field_record.py                    # step 7
+    └── test_docs.py                            # steps 6, 8, 9, 10
+```
+
+## 4. Data Model
+Eval item, one JSON object per line of `eval-set.jsonl`:
+`{"id": "T001", "text": "<synthetic ticket>", "label": "<route>"}`; `label` is one of `billing`,
+`refund`, `fraud`, `access`, `other`; ids unique.
+
+Prediction: `{"id": str, "route": str | null, "confidence": float}`; `route` null = abstain (sent to
+a human).
+
+Score object (from `scorer.score`): keys `system` (str), `n`, `answered`, `abstained`, `correct`,
+`wrong_auto_routes` (int), `accuracy`, `answered_accuracy`, `coverage` (float, rounded to 4 places).
+`accuracy = correct / n`; `answered_accuracy = correct / answered`, 0.0 when `answered` is 0;
+`coverage = answered / n`; a wrong auto route is an answered prediction whose route differs from the
+label. Run file `runs/<system>.json` = the score object plus key `predictions` (list of prediction
+objects in eval-set order), serialized with `json.dumps(obj, indent=2, sort_keys=True) + "\n"`.
+
+## 5. API Design
+- `scorer.load_eval(path) -> list[dict]`: raises `ValueError` on a missing key, a label outside the
+  five routes, or a duplicate id.
+- `scorer.score(system, items, preds) -> dict`: raises `ValueError` when prediction ids are not
+  exactly the item ids.
+- `systems.baseline(text) -> tuple[str | None, float]` (always answers) and
+  `systems.improved(text) -> tuple[str | None, float]` (may return route `None`).
+- `python docs/worked-engagement/run_eval.py`: writes both run files, prints exactly two lines in the
+  form `<system> accuracy=<f> answered_accuracy=<f> coverage=<f> wrong_auto_routes=<int>` (floats
+  formatted `:.4f`), `baseline` first, and exits 0. `--out DIR` redirects both run files.
+
+### Interfaces held constant
+- `fde-portfolio` subcommands `list`, `check`, `checklist`, `build` and their output.
+- Playbook YAML ids, both JSON Schemas, `pyproject.toml` dependencies and version `0.2.0`.
+- All files under `.github/workflows/`.
+
+## 6. Frontend Architecture
+NOT APPLICABLE — documentation and a stdlib script; no UI. No step draws a contract from this section.
+
+## 7. Design System
+NOT APPLICABLE — no UI. No step draws a contract from this section.
+
+## 8. Authentication & Authorization
+NOT APPLICABLE — no service, no users, no secrets.
+
+## 9. BUILD ORDER
+
+§10 Bootstrap runs once before step 1. Steps run in order; each runs Do, Done when, Verify, then
+Checkpoint. Every Verify block exits 0 on a correct step under `set -e`. Each Checkpoint stages only
+that step's declared paths, asserts the staged list equals them, commits, and tags locally. Tags are
+never pushed. Rollback for step N is `git reset --hard <previous tag>` as named in the step map; for
+step 1 it is the base commit `15cba0fbc6bf08dfabd060b1ab1e97d0512d22ba`.
+
+### Step map
+| # | Step | Depends on | Touches | Gate | Rollback target |
+|---|---|---|---|---|---|
+| 1 | workspace | — | `CLAUDE.md`, `pyproject.toml`, `blueprints/fde-field-record-blueprint.md` | `/tmp/fde-py312/bin/python -m pytest -q` | `15cba0fbc6bf08dfabd060b1ab1e97d0512d22ba` |
+| 2 | eval-set | 1 | `docs/worked-engagement/eval-set.jsonl`, `docs/worked-engagement/scorer.py`, `tests/test_scorer.py` | `/tmp/fde-py312/bin/python -m pytest -q tests/test_scorer.py` | `step-01-workspace` |
+| 3 | score | 2 | `docs/worked-engagement/scorer.py`, `tests/test_scorer.py` | `/tmp/fde-py312/bin/python -m pytest -q tests/test_scorer.py` | `step-02-eval-set` |
+| 4 | systems | 3 | `docs/worked-engagement/systems.py`, `tests/test_systems.py` | `/tmp/fde-py312/bin/python -m pytest -q tests/test_systems.py` | `step-03-score` |
+| 5 | runs | 4 | `docs/worked-engagement/run_eval.py`, `docs/worked-engagement/runs/baseline.json`, `docs/worked-engagement/runs/improved.json`, `tests/test_systems.py` | `/tmp/fde-py312/bin/python -m pytest -q tests/test_systems.py` | `step-04-systems` |
+| 6 | engagement-readme | 5 | `docs/worked-engagement/README.md`, `tests/test_docs.py` | `/tmp/fde-py312/bin/python -m pytest -q tests/test_docs.py` | `step-05-runs` |
+| 7 | field-record | 1 | `docs/field-record.md`, `tests/test_field_record.py` | `/tmp/fde-py312/bin/python -m pytest -q tests/test_field_record.py` | `step-06-engagement-readme` |
+| 8 | ops-docs | 6 | `docs/failure-taxonomy.md`, `docs/runbook.md`, `tests/test_docs.py` | `/tmp/fde-py312/bin/python -m pytest -q tests/test_docs.py` | `step-07-field-record` |
+| 9 | adrs | 8 | `docs/adr/0001-deterministic-offline-eval.md`, `docs/adr/0002-confidence-gate-abstain-to-human.md`, `docs/adr/0003-claim-labels-and-pseudonyms.md`, `tests/test_docs.py` | `/tmp/fde-py312/bin/python -m pytest -q tests/test_docs.py` | `step-08-ops-docs` |
+| 10 | readme | 9 | `README.md`, `scripts/smoke.sh`, `tests/test_docs.py` | `/tmp/fde-py312/bin/python -m pytest -q` | `step-09-adrs` |
+
+### Step 1 — workspace (`workspace`)
+**Do.** Write `CLAUDE.md` with the exact content in §19.1. In `pyproject.toml` change
+`extend-exclude = ["mcp", ".rig"]` to `extend-exclude = ["mcp", ".rig", "blueprints"]` and add the line
+`norecursedirs = ["blueprints", ".venv", ".git"]` under `[tool.pytest.ini_options]` (final block in
+§19.6). Files: `CLAUDE.md`, `pyproject.toml`, and this blueprint (committed here).
+
+**Done when.**
+- WHEN `/tmp/fde-py312/bin/python -m pytest -q` runs THE SYSTEM SHALL exit 0 with 0 failed.
+- WHEN `/tmp/fde-py312/bin/ruff check .` runs THE SYSTEM SHALL exit 0.
+- WHEN `pyproject.toml` is read THE SYSTEM SHALL contain the literal `"blueprints"` in both `extend-exclude` and `norecursedirs`.
+
+**Verify.**
+```bash
+/tmp/fde-py312/bin/python -m pytest -q        # expect: exit 0, 0 failed
+/tmp/fde-py312/bin/ruff check .               # expect: exit 0
+grep -qx 'extend-exclude = \["mcp", ".rig", "blueprints"\]' pyproject.toml   # expect: exit 0
+grep -qx 'norecursedirs = \["blueprints", ".venv", ".git"\]' pyproject.toml  # expect: exit 0
+```
+**Checkpoint.**
+```bash
+git add CLAUDE.md pyproject.toml blueprints/fde-field-record-blueprint.md
+test "$(git diff --cached --name-only | LC_ALL=C sort | tr '\n' ' ')" = "CLAUDE.md blueprints/fde-field-record-blueprint.md pyproject.toml "
+git commit -m "step 1: workspace" && git tag step-01-workspace
+```
+
+### Step 2 — eval set and loader (`eval-set`)
+**Do.** Write `docs/worked-engagement/eval-set.jsonl`: 34 SYNTHETIC tickets for a fictional payments
+company, per §4, ids `T001`..`T034`, every one of the five routes present, at least 6 items worded
+ambiguously or with a negation ("Not a fraud issue, ..."). Write `docs/worked-engagement/scorer.py`
+with `ROUTES` and `load_eval` per §5. Write `tests/test_scorer.py` that inserts
+`docs/worked-engagement` at `sys.path[0]` and tests: the shipped set loads 34 items with all five
+labels; a duplicate id, a missing key and an unknown label each raise `ValueError` (via `tmp_path`).
+
+**Done when.**
+- WHEN `load_eval` reads the shipped set THE SYSTEM SHALL return 34 items carrying 5 distinct labels.
+- WHEN a file holds a duplicate id THE SYSTEM SHALL raise `ValueError`.
+- WHEN a line has an unknown label THE SYSTEM SHALL raise `ValueError`.
+
+**Verify.**
+```bash
+/tmp/fde-py312/bin/python -m pytest -q tests/test_scorer.py   # expect: exit 0, 0 failed
+/tmp/fde-py312/bin/ruff check .                               # expect: exit 0
+```
+**Checkpoint.**
+```bash
+git add docs/worked-engagement/eval-set.jsonl docs/worked-engagement/scorer.py tests/test_scorer.py
+test "$(git diff --cached --name-only | LC_ALL=C sort | tr '\n' ' ')" = "docs/worked-engagement/eval-set.jsonl docs/worked-engagement/scorer.py tests/test_scorer.py "
+git commit -m "step 2: eval-set" && git tag step-02-eval-set
+```
+
+### Step 3 — score function (`score`)
+**Do.** Add `score` to `docs/worked-engagement/scorer.py` per §4 and §5. Extend `tests/test_scorer.py`
+with: all-correct predictions give accuracy 1.0 and coverage 1.0; one abstention lowers coverage and
+leaves `wrong_auto_routes` 0; one wrong route counts 1 wrong auto route; zero answered gives
+`answered_accuracy` 0.0; mismatched ids raise `ValueError`.
+
+**Done when.**
+- WHEN all predictions match THE SYSTEM SHALL return `accuracy` 1.0 and `coverage` 1.0.
+- WHEN one prediction abstains THE SYSTEM SHALL count it in `abstained` and not in `wrong_auto_routes`.
+- WHEN prediction ids differ from item ids THE SYSTEM SHALL raise `ValueError`.
+
+**Verify.**
+```bash
+/tmp/fde-py312/bin/python -m pytest -q tests/test_scorer.py   # expect: exit 0, 0 failed
+/tmp/fde-py312/bin/ruff check .                               # expect: exit 0
+```
+**Checkpoint.**
+```bash
+git add docs/worked-engagement/scorer.py tests/test_scorer.py
+test "$(git diff --cached --name-only | LC_ALL=C sort | tr '\n' ' ')" = "docs/worked-engagement/scorer.py tests/test_scorer.py "
+git commit -m "step 3: score" && git tag step-03-score
+```
+
+### Step 4 — two systems (`systems`)
+**Do.** Write `docs/worked-engagement/systems.py`: `baseline` is a first-match keyword router that
+always answers with confidence 1.0 and falls back to `other`; `improved` sums keyword weights per
+route, ignores keywords inside a "not ..." negation clause, and returns route `None` when the top
+score is under 2 or leads the runner-up by less than 1. Write `tests/test_systems.py` with:
+`baseline` never returns `None` on the shipped set; `improved("Someone used my card in another
+country, I did not make this purchase")` returns `fraud`; `improved("Hello")` returns route `None`;
+`improved("Not a fraud issue, I just need a copy of last month's invoice")` returns `billing`.
+
+**Done when.**
+- WHEN `baseline` runs on every shipped item THE SYSTEM SHALL return a non-`None` route each time.
+- WHEN `improved` receives the negated-fraud invoice ticket THE SYSTEM SHALL return `billing`.
+- WHEN `improved` receives `Hello` THE SYSTEM SHALL return route `None`.
+
+**Verify.**
+```bash
+/tmp/fde-py312/bin/python -m pytest -q tests/test_systems.py  # expect: exit 0, 0 failed
+/tmp/fde-py312/bin/ruff check .                               # expect: exit 0
+```
+**Checkpoint.**
+```bash
+git add docs/worked-engagement/systems.py tests/test_systems.py
+test "$(git diff --cached --name-only | LC_ALL=C sort | tr '\n' ' ')" = "docs/worked-engagement/systems.py tests/test_systems.py "
+git commit -m "step 4: systems" && git tag step-04-systems
+```
+
+### Step 5 — runner and saved runs (`runs`)
+**Do.** Write `docs/worked-engagement/run_eval.py` per §5 with an optional `--out DIR` (default: the
+`runs/` folder beside the script). Run `/tmp/fde-py312/bin/python docs/worked-engagement/run_eval.py` once to
+write the two run files. Extend `tests/test_systems.py` with three tests: (a) runs `[sys.executable, "docs/worked-engagement/run_eval.py", "--out", str(tmp_path)]` with
+`subprocess.run(capture_output=True, text=True)`, asserts return code 0, and asserts
+`stdout.splitlines()` equals exactly `[line(b), line(i)]`, where `b` and `i` are the JSON objects read
+from `tmp_path/baseline.json` and `tmp_path/improved.json` and
+`line(d) = f"{d['system']} accuracy={d['accuracy']:.4f} answered_accuracy={d['answered_accuracy']:.4f} coverage={d['coverage']:.4f} wrong_auto_routes={d['wrong_auto_routes']}"`
+(the runner prints with this same format); (b) both files in `tmp_path` are byte-identical to the committed
+`runs/baseline.json` and `runs/improved.json`; (c) in the saved runs, improved `wrong_auto_routes` is
+lower than baseline's, improved `answered_accuracy` is higher than baseline's, and improved
+`coverage` is at least 0.8.
+
+**Done when.**
+- WHEN the runner runs into a temporary folder THE SYSTEM SHALL exit 0 and print exactly the baseline line then the improved line, each equal to the line built from its JSON file.
+- WHEN its two outputs are compared with the saved runs THE SYSTEM SHALL find both byte-identical.
+- WHEN the saved runs are compared THE SYSTEM SHALL show improved with fewer wrong auto routes, higher answered accuracy, and coverage at least 0.8.
+
+**Verify.**
+```bash
+/tmp/fde-py312/bin/python docs/worked-engagement/run_eval.py   # expect: exit 0 (stdout asserted by test (a))
+/tmp/fde-py312/bin/python -m pytest -q tests/test_systems.py   # expect: exit 0, 0 failed
+/tmp/fde-py312/bin/ruff check .                                # expect: exit 0
+```
+**Checkpoint.**
+```bash
+git add docs/worked-engagement/run_eval.py docs/worked-engagement/runs/baseline.json docs/worked-engagement/runs/improved.json tests/test_systems.py
+test "$(git diff --cached --name-only | LC_ALL=C sort | tr '\n' ' ')" = "docs/worked-engagement/run_eval.py docs/worked-engagement/runs/baseline.json docs/worked-engagement/runs/improved.json tests/test_systems.py "
+git commit -m "step 5: runs" && git tag step-05-runs
+```
+
+### Step 6 — worked engagement README (`engagement-readme`)
+**Do.** Write `docs/worked-engagement/README.md`. Line 1 `# Worked engagement: payments ticket routing`,
+line 2 blank, line 3 exactly `> SYNTHETIC. Fictional company, fictional tickets. Every number below is produced by \`run_eval.py\`.`
+Then sections `## Brief`, `## Constraints`, `## Method`, `## Results`, `## Rerun`. Under `## Results`
+a table with header `| system | accuracy | answered_accuracy | coverage | wrong_auto_routes |` and one
+row per system in baseline-then-improved order, each equal to `row(d)` below built from that system's saved run file.
+Create `tests/test_docs.py` with a test that reads both run files and asserts line 3 equals the
+SYNTHETIC banner and that, for `d` in (baseline, improved), the full line
+`row(d) = f"| {d['system']} | {d['accuracy']:.4f} | {d['answered_accuracy']:.4f} | {d['coverage']:.4f} | {d['wrong_auto_routes']} |"`
+appears in the README, baseline's line before improved's.
+
+**Done when.**
+- WHEN the README's line 3 is read THE SYSTEM SHALL equal the SYNTHETIC banner.
+- WHEN each run file is read THE SYSTEM SHALL find its exact results row as a full README line.
+
+**Verify.**
+```bash
+/tmp/fde-py312/bin/python -m pytest -q tests/test_docs.py   # expect: exit 0, 0 failed
+/tmp/fde-py312/bin/ruff check .                             # expect: exit 0
+```
+**Checkpoint.**
+```bash
+git add docs/worked-engagement/README.md tests/test_docs.py
+test "$(git diff --cached --name-only | LC_ALL=C sort | tr '\n' ' ')" = "docs/worked-engagement/README.md tests/test_docs.py "
+git commit -m "step 6: engagement-readme" && git tag step-06-engagement-readme
+```
+
+### Step 7 — field record (`field-record`)
+**Do.** Write `docs/field-record.md` with exactly this structure and only the literals in §14:
+1. Line 1 `# Field record`; line 3 the legend literal from §14.
+2. A table with header `| Deployment | Years | Sector |`, separator `|---|---|---|`, then the four
+   §14 card rows in §14 order, each written as `| <Deployment> | <Years> | <Sector> |`.
+3. One card per row: heading `### <Deployment>`, then the line `**Evidence.**`, then one bullet
+   `- <claim> [confirmed]` per §14 claim for that card, in §14 order, then the line
+   `**Not yet evidenced.**`, then one bullet `- <gap>` per §14 gap for that card.
+No other bullet lines. Unknown facts are never written as claims: a fact the source corpus does not
+hold appears only as a §14 gap string, never as text under `**Evidence.**`.
+Write `tests/test_field_record.py` holding `CARDS` (a list copied verbatim from §14: deployment,
+years, sector, claims, gaps) and asserting: (a) the four table rows equal the §14 rows exactly and in
+order; (b) for each card, the bullets under `**Evidence.**` equal exactly `[f"- {c} [confirmed]" for c
+in claims]` and the bullets under `**Not yet evidenced.**` equal exactly `[f"- {g}" for g in gaps]`;
+(c) the file contains no `[inferred]` and no `[unverified]`, and every bullet line in the file is one
+of the bullets in (b); (d) every number token matching `\d[\d,]*(\.\d+)?` is in `ALLOWED_NUMBERS`;
+(e) none of the §14 forbidden terms appears (case-insensitive).
+
+**Done when.**
+- WHEN the field record is parsed THE SYSTEM SHALL find the four §14 rows and four cards, each card's claims equal to its §14 claims with label `[confirmed]`.
+- WHEN a claim bullet differs from its §14 text or label THE SYSTEM SHALL fail test (b) or (c).
+- WHEN a number outside `ALLOWED_NUMBERS` or a forbidden term appears THE SYSTEM SHALL fail test (d) or (e).
+
+**Verify.**
+```bash
+/tmp/fde-py312/bin/python -m pytest -q tests/test_field_record.py   # expect: exit 0, 0 failed
+/tmp/fde-py312/bin/ruff check .                                     # expect: exit 0
+```
+**Checkpoint.**
+```bash
+git add docs/field-record.md tests/test_field_record.py
+test "$(git diff --cached --name-only | LC_ALL=C sort | tr '\n' ' ')" = "docs/field-record.md tests/test_field_record.py "
+git commit -m "step 7: field-record" && git tag step-07-field-record
+```
+
+### Step 8 — failure taxonomy and runbook (`ops-docs`)
+**Do.** Write `docs/failure-taxonomy.md` with a table headed
+`| Class | Seen in | Detection signal | Mitigation |` and at least 6 rows, including the
+worked-engagement classes `confident wrong route`, `negation flip` and `empty or vague ticket`.
+Write `docs/runbook.md` with sections `## Rerun the eval`, `## Add an eval item`,
+`## Change a field-record fact`, `## Roll back`. Extend `tests/test_docs.py`: the taxonomy has the
+header and at least 6 data rows and names the three classes; the runbook has the four exact headings.
+
+**Done when.**
+- WHEN the taxonomy is parsed THE SYSTEM SHALL find the header, at least 6 data rows and the three named classes.
+- WHEN the runbook is read THE SYSTEM SHALL find each of the four headings as a full line.
+
+**Verify.**
+```bash
+/tmp/fde-py312/bin/python -m pytest -q tests/test_docs.py   # expect: exit 0, 0 failed
+```
+**Checkpoint.**
+```bash
+git add docs/failure-taxonomy.md docs/runbook.md tests/test_docs.py
+test "$(git diff --cached --name-only | LC_ALL=C sort | tr '\n' ' ')" = "docs/failure-taxonomy.md docs/runbook.md tests/test_docs.py "
+git commit -m "step 8: ops-docs" && git tag step-08-ops-docs
+```
+
+### Step 9 — ADRs (`adrs`)
+**Do.** Write `docs/adr/0001-deterministic-offline-eval.md`,
+`docs/adr/0002-confidence-gate-abstain-to-human.md`, `docs/adr/0003-claim-labels-and-pseudonyms.md`,
+each with the full lines `## Context`, `## Decision`, `## Consequences`, `## Alternatives rejected`,
+each followed by non-empty text. Extend `tests/test_docs.py` to assert exactly that for the three
+exact paths.
+
+**Done when.**
+- WHEN each of the three exact ADR paths is read THE SYSTEM SHALL find the four headings as full lines.
+- WHEN a heading is followed only by blank lines THE SYSTEM SHALL fail the test.
+
+**Verify.**
+```bash
+/tmp/fde-py312/bin/python -m pytest -q tests/test_docs.py   # expect: exit 0, 0 failed
+```
+**Checkpoint.**
+```bash
+git add docs/adr/0001-deterministic-offline-eval.md docs/adr/0002-confidence-gate-abstain-to-human.md docs/adr/0003-claim-labels-and-pseudonyms.md tests/test_docs.py
+test "$(git diff --cached --name-only | LC_ALL=C sort | tr '\n' ' ')" = "docs/adr/0001-deterministic-offline-eval.md docs/adr/0002-confidence-gate-abstain-to-human.md docs/adr/0003-claim-labels-and-pseudonyms.md tests/test_docs.py "
+git commit -m "step 9: adrs" && git tag step-09-adrs
+```
+
+### Step 10 — README reorder and smoke (`readme`)
+**Do.** In `README.md`: keep the H1 and every existing line above `## Why this exists` unchanged (no
+image line is added; the owner inserts media under the H1 in a later commit). Insert, before
+`## Why this exists`, the section `## Field record` whose body contains the link literal
+`[docs/field-record.md](docs/field-record.md)`, then the section `## Worked engagement (synthetic)`
+whose body contains the link literal `[docs/worked-engagement/README.md](docs/worked-engagement/README.md)`.
+Rename `## Quick start (5 lines)` to `## Quick start` and keep it after both new sections. Rewrite the
+`## The operating record` paragraph so it carries no repository count (no `366`, no `-repo`). Keep the
+CI badge, the `git clone` line, a test command and the footer that `tests/test_repo_hygiene.py`
+requires. In `scripts/smoke.sh` add `docs/field-record.md docs/runbook.md docs/failure-taxonomy.md`
+to the `for f in` list. Extend `tests/test_docs.py`: (a) the README contains no `![` image line;
+(b) the full lines `## Field record`, `## Worked engagement (synthetic)`, `## Quick start` appear in
+that order; (c) the text between `## Field record` and the next `## ` line contains the field-record
+link literal, the text between `## Worked engagement (synthetic)` and the next `## ` line contains the
+engagement link literal, and both link targets exist on disk; (d) neither `366` nor `-repo` appears;
+(e) for each of the three new docs, a copy of `scripts/smoke.sh` in `tmp_path/scripts/` with the eight
+listed files copied beside it, minus that one doc, exits 1 under `subprocess.run(["bash", ...])`, and
+with all eight present exits 0 and prints `fde-portfolio smoke PASS`.
+
+**Done when.**
+- WHEN README is scanned THE SYSTEM SHALL find no image line, the three headings in order, and no repository count.
+- WHEN each new section is read THE SYSTEM SHALL find its link literal and the link target SHALL exist.
+- WHEN smoke runs with one new doc missing THE SYSTEM SHALL exit 1.
+- WHEN the full suite runs THE SYSTEM SHALL exit 0 with 0 failed.
+
+**Verify.**
+```bash
+/tmp/fde-py312/bin/python -m pytest -q    # expect: exit 0, 0 failed
+bash scripts/smoke.sh            # expect: exit 0, prints fde-portfolio smoke PASS
+/tmp/fde-py312/bin/ruff check .           # expect: exit 0
+```
+**Checkpoint.**
+```bash
+git add README.md scripts/smoke.sh tests/test_docs.py
+test "$(git diff --cached --name-only | LC_ALL=C sort | tr '\n' ' ')" = "README.md scripts/smoke.sh tests/test_docs.py "
+git commit -m "step 10: readme" && git tag step-10-readme
+```
+
+### 9.1 Parity and cutover
+NOT APPLICABLE — additive change; nothing is migrated, replaced or cut over. The held-constant CLI
+and playbooks keep their existing tests as the parity check.
+
+## 10. Environment Setup
+Environment variables: none. Prerequisites: `git`, `uv` (checked with `uv --version`; 0.13.1
+observed), Python 3.12 available to `uv` (checked with `uv python find 3.12`). Bootstrap, safe to run
+twice (each line exits 0 on a second run):
+```bash
+git cat-file -e 15cba0fbc6bf08dfabd060b1ab1e97d0512d22ba^{commit}
+if git show-ref -q --verify refs/heads/aside/tier2-portfolio-20261123; then git switch aside/tier2-portfolio-20261123; else git switch -c aside/tier2-portfolio-20261123 15cba0fbc6bf08dfabd060b1ab1e97d0512d22ba; fi
+test -x /tmp/fde-py312/bin/python || uv venv -p 3.12 /tmp/fde-py312
+/tmp/fde-py312/bin/python -c 'import sys; assert sys.version_info[:2] == (3, 12), sys.version'   # expect: exit 0. On failure: `rm -rf /tmp/fde-py312` (build-owned, outside the repo) and rerun this block
+for t in step-01-workspace step-02-eval-set step-03-score step-04-systems step-05-runs step-06-engagement-readme step-07-field-record step-08-ops-docs step-09-adrs step-10-readme; do if git rev-parse -q --verify "refs/tags/$t" >/dev/null; then git merge-base --is-ancestor "$t" HEAD || { echo "tag conflict: $t"; exit 1; }; fi; done   # expect: exit 0. A step tag not on this branch is a conflict; clear it with the §12 whole-change rollback
+uv pip install --python /tmp/fde-py312/bin/python -e '.[dev]'
+/tmp/fde-py312/bin/python -m pytest -q       # expect: exit 0, 45 passed, 0 failed before step 1
+```
+The build venv lives outside the repository, so nothing it writes can be staged. The repo's existing `.venv/` (Python 3.14) is ignored by `.gitignore` on the base commit and is never read, used or modified. Files that must
+be committed: every path in the step map Touches column. None of them matches a `.gitignore` pattern
+(`.venv/`, `.coverage`, `.pytest_cache/`, `.ruff_cache/`, `*.egg-info/`, `build/`, `__pycache__/`,
+`*.pyc`, `/graft/`).
+
+## 11. Dependencies
+No new dependencies. `pyproject.toml` declares minimum constraints, not pins (`PyYAML>=6.0`,
+`jsonschema>=4.20`, `pytest>=8`, `pytest-cov>=4`, `ruff>=0.5`); all are installed by §10's
+`uv pip install --python /tmp/fde-py312/bin/python -e '.[dev]'`. Session evidence, 2026-11-23, from
+`uv pip list`: PyYAML 6.0.4, jsonschema 4.26.0, pytest 9.2.0, pytest-cov 7.1.0, ruff 0.17.6.
+
+## 12. Deployment Strategy
+No deploy. Work stays on the local branch. Step rollback: the step map's Rollback target column.
+Whole-change rollback, in order: `git switch main`; `for t in step-01-workspace step-02-eval-set step-03-score step-04-systems step-05-runs step-06-engagement-readme step-07-field-record step-08-ops-docs step-09-adrs step-10-readme; do git tag -d "$t" 2>/dev/null || true; done`; `git branch -D aside/tier2-portfolio-20261123`. Tags are local only. Push is
+Gate-D.
+
+## 13. Testing Strategy
+Unit tests for loader and scorer (steps 2-3), behavior tests for both systems (step 4), byte-level
+reproducibility of the runs (step 5), content gates for every new doc (steps 6-10), existing suite
+held green at every step.
+
+## 14. Security & Secrets
+No secrets. Source rule: every career number and deployment fact comes only from the maintainer's
+private career answers corpus, confirmed section; its never-claim list is never used. Public-claim
+rule: only `[confirmed]` facts appear as claims in public copy (the field record and README). Facts
+the corpus holds only as on-record but unverified, and facts it does not hold at all, are never
+written as claims; each real gap is named once as a gap string below. `[inferred]` and `[unverified]`
+never appear in public copy. The literals are copied here so the blueprint is self-contained.
+
+Legend literal (line 3 of `docs/field-record.md`):
+`Every claim below is [confirmed] against the maintainer's private career record. Employers and clients appear as sector pseudonyms. Gaps are listed, not filled.`
+
+| Deployment | Years | Sector |
+|---|---|---|
+| Independent AI practice | 2025 to now | Banking and payments |
+| Health IT vendor, AI portfolio | 2021 to 2026 | Health IT |
+| Regional health system, digital and AI innovation | 2013 to 2020 | Health system |
+| Telehealth startup, product roadmap | 2020 to 2021 | Telehealth |
+
+Claims (each written publicly as `- <claim> [confirmed]`):
+
+| Deployment | Claim (exact text) |
+|---|---|
+| Independent AI practice | 8 client engagements since 2025 |
+| Independent AI practice | 6 client AI applications live under a written reference architecture, each with a roadmap, service level and health metrics |
+| Independent AI practice | Up to 80% adoption of client AI applications through walkthroughs, training and super-user networks |
+| Independent AI practice | 8 activate, buy or build feasibility reviews with client IT before spend |
+| Independent AI practice | 6 third-party AI vendors vetted for model risk |
+| Independent AI practice | A measured cut of about 20% in run cost, incidents, manual handling or review cycle time |
+| Independent AI practice | Confidence-gated AI actions with a tamper-evident audit trail, guardrails and eval harnesses |
+| Independent AI practice | About 30% of practice time on self-learning systems that improve from usage feedback |
+| Health IT vendor, AI portfolio | AI and analytics intake of 12 use cases, top 4 funded |
+| Health IT vendor, AI portfolio | 8 AI business cases built with Finance |
+| Health IT vendor, AI portfolio | 3 AI and analytics vendor evaluations with Procurement, Risk and Legal |
+| Health IT vendor, AI portfolio | An AI capability taken through formal security, privacy, HIPAA and compliance review |
+| Regional health system, digital and AI innovation | AI and ML work since 2019, including radiology read prioritization about 15% faster |
+| Regional health system, digital and AI innovation | 6 digital-health projects run through an innovation center of excellence |
+| Telehealth startup, product roadmap | 6 end-user focus groups and roadmap sessions with health-system partners |
+
+Gaps (each written publicly as `- <gap>`):
+
+| Deployment | Gap (exact text) |
+|---|---|
+| Independent AI practice | Client-attributable before and after metrics per engagement |
+| Health IT vendor, AI portfolio | Market-signal volume for the competitive intelligence capability |
+| Regional health system, digital and AI innovation | Teletriage scale and emergency wait-time figures |
+| Telehealth startup, product roadmap | Deployment and outcome facts for the platform |
+
+`ALLOWED_NUMBERS` (verbatim for `tests/test_field_record.py`): `{"2013", "2019", "2020", "2021",
+"2025", "2026", "3", "4", "6", "8", "12", "15", "20", "30", "80"}`.
+
+Forbidden terms (verbatim, case-insensitive): `Oracle`, `Advocate`, `Aurora`, `EmOpti`, `Avis`, `$`,
+`salary`, `compensation`, `Snowflake`, `Databricks`, `Salesforce`, `UiPath`, `P&C`.
+No IPs, hostnames, emails or customer names (`docs/public-boundary.md`).
+
+## 15. Accessibility
+No images are added. All tables have header rows.
+
+## 16. Observability & Cost
+Zero runtime cost. The two run files are the eval's observable output.
+
+## 17. Model Routing
+Builder: one Aside subagent. No model call inside repository code.
+
+## 18. Skills to Use During Build
+None. No step invokes a skill.
+
+## 19. Agent Workspace
+Single-file mode. The repository keeps its existing `AGENTS.md` and `.github/copilot-instructions.md`
+unchanged; step 1 adds `CLAUDE.md` (§19.1). §19.3 is for the builder session only and is not
+committed.
+
+### 19.1 `CLAUDE.md`
+Destination `CLAUDE.md`, written verbatim in step 1:
+```markdown
+# CLAUDE.md — fde-portfolio
+
+## Commands (run from the repo root)
+- Setup: `uv venv -p 3.12 /tmp/fde-py312 && uv pip install --python /tmp/fde-py312/bin/python -e '.[dev]'`
+- Lint: `/tmp/fde-py312/bin/ruff check .`
+- Tests: `/tmp/fde-py312/bin/python -m pytest -q`
+- Playbook gate: `/tmp/fde-py312/bin/fde-portfolio check`
+- Eval: `/tmp/fde-py312/bin/python docs/worked-engagement/run_eval.py`
+- Smoke: `bash scripts/smoke.sh`
+
+## How it connects
+- `src/fde_portfolio/` renders the YAML playbooks; it is held constant by the field-record blueprint.
+- `docs/worked-engagement/` is a SYNTHETIC eval: `eval-set.jsonl` -> `systems.py` -> `scorer.py`
+  -> `runs/*.json`, driven by `run_eval.py`. Saved runs must equal a fresh run byte for byte.
+- `docs/field-record.md` numbers are gated by `tests/test_field_record.py`.
+
+## Rules
+- Public claims in `docs/field-record.md` are `[confirmed]` only; real gaps go under "Not yet evidenced".
+- Customers and employers appear as sector pseudonyms only. No compensation figures.
+- No new dependencies. No push without the owner's written approval.
+- `AGENTS.md` stays the bridge file; keep both in agreement.
+```
+
+### 19.2 `AGENTS.md`
+Unchanged existing file (bridge file; points to `bash scripts/smoke.sh`). Step 1 does not edit it.
+
+### 19.3 `.claude/settings.json`
+Builder-session allowlist, not committed. Activation, before §10 Bootstrap: an unattended
+Claude Code builder copies this block to `.claude/settings.local.json` (git ignores it via the
+builder's global excludes; it is never staged, because every Checkpoint stages explicit paths and
+asserts the staged list) or passes it with `claude --settings <file>`; an Aside or Codex builder runs
+under its own session approval and needs no file. Each subcommand of every Verify, Checkpoint,
+Bootstrap and §20.1 line has an entry, including the ten exact `git tag` commands:
+```json
+{
+  "permissions": {
+    "allow": [
+      "Bash(/tmp/fde-py312/bin/python -m pytest -q)",
+      "Bash(/tmp/fde-py312/bin/python -m pytest -q tests/test_scorer.py)",
+      "Bash(/tmp/fde-py312/bin/python -m pytest -q tests/test_systems.py)",
+      "Bash(/tmp/fde-py312/bin/python -m pytest -q tests/test_docs.py)",
+      "Bash(/tmp/fde-py312/bin/python -m pytest -q tests/test_field_record.py)",
+      "Bash(/tmp/fde-py312/bin/python docs/worked-engagement/run_eval.py)",
+      "Bash(/tmp/fde-py312/bin/ruff check .)",
+      "Bash(/tmp/fde-py312/bin/fde-portfolio check)",
+      "Bash(bash scripts/smoke.sh)",
+      "Bash(uv --version)",
+      "Bash(uv python find 3.12)",
+      "Bash(uv venv -p 3.12 /tmp/fde-py312)",
+      "Bash(uv pip install --python /tmp/fde-py312/bin/python -e '.[dev]')",
+      "Bash(test:*)",
+      "Bash(git add:*)",
+      "Bash(git commit -m:*)",
+      "Bash(git tag step-01-workspace)",
+      "Bash(git tag step-02-eval-set)",
+      "Bash(git tag step-03-score)",
+      "Bash(git tag step-04-systems)",
+      "Bash(git tag step-05-runs)",
+      "Bash(git tag step-06-engagement-readme)",
+      "Bash(git tag step-07-field-record)",
+      "Bash(git tag step-08-ops-docs)",
+      "Bash(git tag step-09-adrs)",
+      "Bash(git tag step-10-readme)",
+      "Bash(git tag -d:*)",
+      "Bash(git merge-base --is-ancestor:*)",
+      "Bash(git branch -D aside/tier2-portfolio-20261123)",
+      "Bash(rm -rf /tmp/fde-py312)",
+      "Bash(/tmp/fde-py312/bin/python -c:*)",
+      "Bash(git ls-files --error-unmatch:*)",
+      "Bash(git diff --exit-code HEAD -- docs/worked-engagement/runs)",
+      "Bash(grep -qx:*)",
+      "Bash(echo:*)",
+      "Bash(git switch:*)",
+      "Bash(git show-ref:*)",
+      "Bash(git cat-file:*)",
+      "Bash(git rev-parse:*)",
+      "Bash(git diff:*)",
+      "Bash(git ls-files:*)",
+      "Bash(LC_ALL=C sort)",
+      "Bash(tr:*)"
+    ],
+    "deny": ["Bash(git push:*)", "Read(.env)", "Bash(git reset --hard origin:*)"]
+  }
+}
+```
+
+### 19.4 Project skills — `.claude/skills/<name>/SKILL.md`
+NOT APPLICABLE — no project skill is needed; no step references one.
+
+### 19.5 `.claude/rules/*.md`
+NOT APPLICABLE — the rules live in §19.1; no step references a rules file.
+
+### 19.6 Verify-critical config and local infrastructure
+Destination `pyproject.toml`: the two governing blocks after step 1, complete (every other block in
+the file is unchanged):
+```toml
+[tool.ruff]
+line-length = 110
+target-version = "py310"
+extend-exclude = ["mcp", ".rig", "blueprints"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"
+pythonpath = ["src"]
+norecursedirs = ["blueprints", ".venv", ".git"]
+```
+The `[tool.ruff.lint]` and `[tool.ruff.lint.per-file-ignores]` blocks stay as on the base commit
+(`select = ["E", "F", "W", "I", "B", "UP"]`, `"tests/*" = ["E501"]`). No services are needed.
+
+Every file a Verify or §20.1 command names is created by a step: `CLAUDE.md`, `pyproject.toml` (1);
+`tests/test_scorer.py` (2); `tests/test_systems.py` (4); `docs/worked-engagement/run_eval.py` and both
+run files (5); `tests/test_docs.py` (6); `tests/test_field_record.py` (7); `scripts/smoke.sh` edited (10,
+exists on base).
+
+Byte-exact artifact reconciliation: the two run files are never hand-written; `run_eval.py` produces
+them with the §4 serialization and step 5 test (b) compares a fresh run against them. The results rows
+in the engagement README are compared against the run files by step 6's test.
+
+| Resolution convention matrix: loader | How `scorer` and `systems` resolve |
+|---|---|
+| app: `run_eval.py` run as a script | the script's folder is `sys.path[0]` |
+| app: `run_eval.main` imported by tests | test inserts `docs/worked-engagement` at `sys.path[0]` first |
+| tests: `tests/test_scorer.py`, `tests/test_systems.py`, `tests/test_docs.py` | `sys.path.insert(0, str(ROOT / "docs" / "worked-engagement"))` at module top |
+| package code `src/` | unaffected (`pythonpath = ["src"]`) |
+
+| Bundle-path exclusion | Literal exclusion |
+|---|---|
+| ruff | `extend-exclude = ["mcp", ".rig", "blueprints"]` |
+| pytest | `norecursedirs = ["blueprints", ".venv", ".git"]` and `testpaths = ["tests"]` |
+
+| Cross-artifact value | Literal | Stated in | Compared |
+|---|---|---|---|
+| eval runner path | `docs/worked-engagement/run_eval.py` | §3, §5, step map, step 5, §19.1, §19.3, §20.1 | yes |
+| run files | `docs/worked-engagement/runs/baseline.json`, `docs/worked-engagement/runs/improved.json` | §3, §4, step map, step 5, §20.1 | yes |
+| scorer test | `tests/test_scorer.py` | §3, step map, steps 2-3, §19.3 | yes |
+| systems test | `tests/test_systems.py` | §3, step map, steps 4-5, §19.3 | yes |
+| docs test | `tests/test_docs.py` | §3, step map, steps 6, 8, 9, 10, §19.3 | yes |
+| field record test | `tests/test_field_record.py` | §3, step map, step 7, §19.3 | yes |
+| smoke script | `scripts/smoke.sh` | §3, step 10, §19.1, §19.3, §20.1 | yes |
+| no-image rule | README holds no `![` line | §1 target, Non-Goals, step 10 test (a), §15 | yes |
+| `CLAUDE.md` | `CLAUDE.md` (content §19.1) | §3, step map, step 1, §19 intro | yes |
+| `pyproject.toml` | `extend-exclude = ["mcp", ".rig", "blueprints"]`; `norecursedirs = ["blueprints", ".venv", ".git"]` | §3, step map, step 1 Verify, §19.6 block | yes, by step 1 `grep -qx` |
+| eval set | `docs/worked-engagement/eval-set.jsonl` | §3, §4, step map, step 2, §19.1 | yes |
+| scorer module | `docs/worked-engagement/scorer.py` | §3, §5, step map, steps 2-3, §19.1 | yes |
+| systems module | `docs/worked-engagement/systems.py` | §3, §5, step map, step 4, §19.1 | yes |
+| blueprints exclusion | `blueprints` | step 1, §19.6 block and exclusion table | yes, by step 1 `grep -qx` |
+| run output line | `f"{d['system']} accuracy={d['accuracy']:.4f} answered_accuracy={d['answered_accuracy']:.4f} coverage={d['coverage']:.4f} wrong_auto_routes={d['wrong_auto_routes']}"` | §5, step 5 | yes, step 5 test (a) |
+| build venv | `/tmp/fde-py312` | §2, §10, §19.1, §19.3, every Verify | yes, §10 version assert |
+| step tags | the ten names in §20.1 | step Checkpoints, §10, §12, §19.3, §20.1 | yes, §20.1 loop |
+| field-record literals | legend, rows, claims, gaps, `ALLOWED_NUMBERS` | §14, step 7 | yes, step 7 tests |
+| README headings | `## Field record`, `## Worked engagement (synthetic)`, `## Quick start` | step 10 | yes |
+| README links | `[docs/field-record.md](docs/field-record.md)`, `[docs/worked-engagement/README.md](docs/worked-engagement/README.md)` | step 10 | yes, step 10 test (c) |
+| branch | `aside/tier2-portfolio-20261123` | header, §10, §12 | yes |
+| base commit | `15cba0fbc6bf08dfabd060b1ab1e97d0512d22ba` | header, §9, step map, §10 | yes |
+| SYNTHETIC banner | ``> SYNTHETIC. Fictional company, fictional tickets. Every number below is produced by `run_eval.py`.`` | step 6 | yes, step 6 test |
+
+## 20. Acceptance Gate, Risks & Decision Log
+
+### 20.1 Global acceptance gate
+```bash
+/tmp/fde-py312/bin/ruff check .                                            # expect: exit 0
+/tmp/fde-py312/bin/python -m pytest -q                                     # expect: exit 0, 0 failed
+/tmp/fde-py312/bin/fde-portfolio check                                     # expect: exit 0
+bash scripts/smoke.sh                                             # expect: exit 0
+git ls-files --error-unmatch docs/worked-engagement/runs/baseline.json docs/worked-engagement/runs/improved.json   # expect: exit 0, both tracked
+/tmp/fde-py312/bin/python docs/worked-engagement/run_eval.py && git diff --exit-code HEAD -- docs/worked-engagement/runs   # expect: exit 0, rerun equals committed bytes
+for t in step-01-workspace step-02-eval-set step-03-score step-04-systems step-05-runs step-06-engagement-readme step-07-field-record step-08-ops-docs step-09-adrs step-10-readme; do git rev-parse -q --verify "refs/tags/$t^{commit}" >/dev/null || exit 1; done   # expect: exit 0, all ten tags resolve
+```
+Bootstrap re-run: running §10's block a second time exits 0 on every line.
+
+Post-build launch checklist (not gates): the owner adds hero media under the H1 in a later commit;
+Mike approves the push of the branch.
+
+### 20.2 Risk register
+| Risk | Mitigation |
+|---|---|
+| A field-record number not in the corpus | `ALLOWED_NUMBERS` test plus label test |
+| Synthetic engagement read as real | banner on line 3, fictional company |
+| Unknown fact written as a claim | public-claim rule (§14) plus step 7 exact-claim test |
+| README hygiene test breaks | full suite runs in step 10 |
+
+### 20.3 Decision log
+| Decision | Because |
+|---|---|
+| Rule-based systems, no LLM | numbers reproduce offline, byte for byte |
+| Wrong auto routes scored apart from accuracy | a confident wrong action costs more than a handoff to a human |
+| Employers shown as sector pseudonyms | the public boundary rule extends cleanly; facts stay checkable privately |
+| Per-step explicit staging | the blueprint and private notes never enter history by accident |
+
+### 20.4 What to build next
+A model-backed third system behind the same scorer; a short demo video; a second engagement.
