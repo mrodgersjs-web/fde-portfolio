@@ -185,19 +185,31 @@ Checkpoint. Every Verify block exits 0 on a correct step under `set -e`. Before 
 every non-step-specific check of steps 1-9 (lint, full pytest, installed CLI, both config literals). Each Checkpoint stages only
 that step's declared paths, asserts the staged list equals them, commits, and tags locally. Tags are
 never pushed. Step rollback is an operator action, never run from the unattended allowlist (§19.3).
-Rollback for step N, where `P` is the fully qualified ref of the step map's Rollback target tag for
-step N (for example `refs/tags/step-04-systems`):
+Rollback to before step N (N = 1..10; operator sets only `N`). It rolls back steps N..10 together,
+refuses to run if any change exists outside the 22 declared paths, and ends on a clean tree:
 ```bash
 set -euo pipefail
 test "$(git branch --show-current)" = aside/tier2-portfolio-20261123 || { echo "wrong branch"; exit 1; }
+TAGS=(step-01-workspace step-02-eval-set step-03-score step-04-systems step-05-runs step-06-engagement-readme step-07-field-record step-08-ops-docs step-09-adrs step-10-readme)
+if [ "$N" -eq 1 ]; then P="$(cat /tmp/fde-build-start)"; else P="refs/tags/${TAGS[$((N-2))]}"; fi
 git rev-parse -q --verify "$P^{commit}" >/dev/null || { echo "invalid rollback ref: $P"; exit 1; }
+ALL=" AGENTS.md CLAUDE.md pyproject.toml docs/worked-engagement/eval-set.jsonl docs/worked-engagement/scorer.py tests/test_scorer.py docs/worked-engagement/systems.py tests/test_systems.py docs/worked-engagement/run_eval.py docs/worked-engagement/runs/baseline.json docs/worked-engagement/runs/improved.json docs/worked-engagement/README.md tests/test_docs.py docs/field-record.md tests/test_field_record.py docs/failure-taxonomy.md docs/runbook.md docs/adr/0001-deterministic-offline-eval.md docs/adr/0002-confidence-gate-abstain-to-human.md docs/adr/0003-claim-labels-and-pseudonyms.md README.md scripts/smoke.sh "
+git status --porcelain | cut -c4- | while read -r f; do case "$ALL" in *" $f "*) ;; *) echo "change outside declared paths: $f"; exit 1;; esac; done
 git reset --hard "$P"
-for f in <step N Touches paths>; do git cat-file -e "$P:$f" 2>/dev/null || rm -f -- "$f"; done
-for t in <step tags numbered N or higher from the §20.1 list>; do if git rev-parse -q --verify "refs/tags/$t" >/dev/null; then git tag -d "$t"; fi; done
+for i in $(seq "$N" 10); do case $i in
+  1) PATHS="AGENTS.md CLAUDE.md pyproject.toml" ;;
+  2) PATHS="docs/worked-engagement/eval-set.jsonl docs/worked-engagement/scorer.py tests/test_scorer.py" ;;
+  3) PATHS="docs/worked-engagement/scorer.py tests/test_scorer.py" ;;
+  4) PATHS="docs/worked-engagement/systems.py tests/test_systems.py" ;;
+  5) PATHS="docs/worked-engagement/run_eval.py docs/worked-engagement/runs/baseline.json docs/worked-engagement/runs/improved.json tests/test_systems.py" ;;
+  6) PATHS="docs/worked-engagement/README.md tests/test_docs.py" ;;
+  7) PATHS="docs/field-record.md tests/test_field_record.py" ;;
+  8) PATHS="docs/failure-taxonomy.md docs/runbook.md tests/test_docs.py" ;;
+  9) PATHS="docs/adr/0001-deterministic-offline-eval.md docs/adr/0002-confidence-gate-abstain-to-human.md docs/adr/0003-claim-labels-and-pseudonyms.md tests/test_docs.py" ;;
+  10) PATHS="README.md scripts/smoke.sh tests/test_docs.py" ;;
+esac; for f in $PATHS; do git cat-file -e "$P:$f" 2>/dev/null || rm -f -- "$f"; done; t="${TAGS[$((i-1))]}"; if git rev-parse -q --verify "refs/tags/$t" >/dev/null; then git tag -d "$t"; fi; done
+test -z "$(git status --porcelain)" || { echo "tree not clean after rollback"; exit 1; }
 ```
-The two placeholder lists are filled from the step map and the ten §20.1 tag names before running;
-only those recorded tags and declared paths are ever touched. For step 1, `P` is the
-recorded SHA itself, `P="$(cat /tmp/fde-build-start)"`, which `git rev-parse` resolves directly, and the tag list is all ten names.
 
 
 ```bash
@@ -207,7 +219,7 @@ recorded SHA itself, `P="$(cat /tmp/fde-build-start)"`, which `git rev-parse` re
 /tmp/fde-py312/bin/fde-portfolio check              # expect: exit 0
 grep -Fqx 'extend-exclude = ["mcp", ".rig", "blueprints"]' pyproject.toml   # expect: exit 0
 grep -Fqx 'norecursedirs = ["blueprints", ".venv", ".git"]' pyproject.toml  # expect: exit 0
-test "$(shasum -a 256 CLAUDE.md | cut -d' ' -f1)" = 83a6bd88c7b1759801a38c726daa94bf48633960567204fd8e08a5b5c8d9d887   # expect: exit 0, CLAUDE.md equals §19.1
+test "$(shasum -a 256 CLAUDE.md | cut -d' ' -f1)" = c0c057439f0ee06b9d30cb9666e52580a89189f3b51b60d44c8fe03b18d83373   # expect: exit 0, CLAUDE.md equals §19.1
 { git show 15cba0fbc6bf08dfabd060b1ab1e97d0512d22ba:AGENTS.md; printf '%s\n' 'Build, lint, test and eval commands: see CLAUDE.md (canonical).'; } | cmp - AGENTS.md   # expect: exit 0, base AGENTS.md plus the one bridge line
 ```
 From step 5 on, G also runs the default (no-argument) runner in an isolated copy:
@@ -244,7 +256,7 @@ branch before Bootstrap, and §10 verifies it is tracked.
 - WHEN `/tmp/fde-py312/bin/ruff check .` runs THE SYSTEM SHALL exit 0.
 - WHEN `/tmp/fde-py312/bin/fde-portfolio check` runs THE SYSTEM SHALL exit 0.
 - WHEN `AGENTS.md` is compared with the base file plus the bridge line THE SYSTEM SHALL find them byte-identical.
-- WHEN `CLAUDE.md` is hashed THE SYSTEM SHALL equal the SHA-256 of the §19.1 block, `83a6bd88c7b1759801a38c726daa94bf48633960567204fd8e08a5b5c8d9d887`.
+- WHEN `CLAUDE.md` is hashed THE SYSTEM SHALL equal the SHA-256 of the §19.1 block, `c0c057439f0ee06b9d30cb9666e52580a89189f3b51b60d44c8fe03b18d83373`.
 - WHEN `pyproject.toml` is read THE SYSTEM SHALL contain the literal `"blueprints"` in both `extend-exclude` and `norecursedirs`.
 
 **Verify.**
@@ -255,7 +267,7 @@ grep -Fqx 'extend-exclude = ["mcp", ".rig", "blueprints"]' pyproject.toml   # ex
 grep -Fqx 'norecursedirs = ["blueprints", ".venv", ".git"]' pyproject.toml  # expect: exit 0
 /tmp/fde-py312/bin/fde-portfolio check   # expect: exit 0, installed console script works
 bash scripts/smoke.sh   # expect: exit 0, prints fde-portfolio smoke PASS
-test "$(shasum -a 256 CLAUDE.md | cut -d' ' -f1)" = 83a6bd88c7b1759801a38c726daa94bf48633960567204fd8e08a5b5c8d9d887   # expect: exit 0, CLAUDE.md equals the §19.1 block
+test "$(shasum -a 256 CLAUDE.md | cut -d' ' -f1)" = c0c057439f0ee06b9d30cb9666e52580a89189f3b51b60d44c8fe03b18d83373   # expect: exit 0, CLAUDE.md equals the §19.1 block
 { git show 15cba0fbc6bf08dfabd060b1ab1e97d0512d22ba:AGENTS.md; printf '%s\n' 'Build, lint, test and eval commands: see CLAUDE.md (canonical).'; } | cmp - AGENTS.md   # expect: exit 0, base AGENTS.md plus the one bridge line
 ```
 **Checkpoint.**
@@ -353,7 +365,7 @@ lower than baseline's, improved `answered_accuracy` is higher than baseline's, a
 `systems.<system>(text)` for the eval item with that id, and `scorer.score(system, items, preds)`
 recomputed from the fixture and the saved predictions equals the saved score fields; (f) copies `run_eval.py`,
 `scorer.py` and `systems.py` into `tmp_path/we/` beside a copy of the fixture with item `T001`
-relabelled from `billing` to `other`, runs `tmp_path/we/run_eval.py --out tmp_path/out`, and asserts
+relabelled from `billing` to `other`, runs `subprocess.run([sys.executable, str(tmp_path / "we" / "run_eval.py"), "--out", str(tmp_path / "out")])`, and asserts
 exit 0 and baseline `correct == 17`.
 
 **Done when.**
@@ -380,8 +392,8 @@ the line `Requires Python 3.10 or newer, standard library only.` and a fenced ba
 exactly `python3 docs/worked-engagement/run_eval.py`. Under `## Results`
 a table with header `| system | accuracy | answered_accuracy | coverage | wrong_auto_routes |` and one
 row per system in baseline-then-improved order, each equal to `row(d)` below built from that system's saved run file.
-Create `tests/test_docs.py` with a test that asserts the `## Rerun` section contains the line
-`python3 docs/worked-engagement/run_eval.py`, reads both run files and asserts line 3 equals the
+Create `tests/test_docs.py` with a test that asserts the `## Rerun` section contains the full lines
+`Requires Python 3.10 or newer, standard library only.` and `python3 docs/worked-engagement/run_eval.py`, reads both run files and asserts line 3 equals the
 SYNTHETIC banner and that, for `d` in (baseline, improved), the full line
 `row(d) = f"| {d['system']} | {d['accuracy']:.4f} | {d['answered_accuracy']:.4f} | {d['coverage']:.4f} | {d['wrong_auto_routes']} |"`
 is checked inside the `## Results` section only (lines after `## Results` up to the next `## `
@@ -455,7 +467,7 @@ git add docs/field-record.md tests/test_field_record.py && test "$(git diff --ca
 worked-engagement classes `confident wrong route`, `negation flip` and `empty or vague ticket`.
 Write `docs/runbook.md` byte for byte as the runbook literal in §19.6. Extend `tests/test_docs.py`:
 the taxonomy has the header and at least 6 data rows and names the three classes; `docs/runbook.md`
-equals the §19.6 runbook literal exactly.
+equals the §19.6 runbook literal exactly and its SHA-256 is `e61230997a70eaf0dc4e86a3c782a7a5969f0c4c6b9245f45f3b8f8b08833833`.
 
 **Done when.**
 - WHEN the taxonomy is parsed THE SYSTEM SHALL find the header, at least 6 data rows and the three named classes.
@@ -588,7 +600,7 @@ No new dependencies. `pyproject.toml` declares minimum constraints, not pins (`P
 
 ## 12. Deployment Strategy
 No deploy. Work stays on the local branch. Step rollback: the step map's Rollback target column.
-Whole-change rollback (operator action, not allowlisted): the step 1 rollback above, then
+Whole-change rollback (operator action, not allowlisted): the rollback above with `N=1`, then
 `git switch main`. The branch, and any tag that existed before §10a recorded the start, are kept. Push is
 Gate-D.
 
@@ -779,6 +791,7 @@ denied: rollback and venv recreation are operator actions approved per run.
       "Bash(git show-ref:*)",
       "Bash(git cat-file:*)",
       "Bash(git status --porcelain)",
+      "Bash(test ! -e .rig/proofs)",
       "Bash(git rev-parse:*)",
       "Bash(LC_ALL=C sort)",
       "Bash(tr:*)"
@@ -959,14 +972,14 @@ improved `accuracy=0.8529 answered_accuracy=1.0000 coverage=0.8529 wrong_auto_ro
 |---|---|---|---|
 | `eval-set.jsonl` bytes | §19.6 frozen fixture | step 2 test, SHA-256 equals `dae205e9367083d71fb820a1a68ecb9755c4c2f0b03d7763ed50598714cc62d5` | yes, digest computed from the fixture source |
 | `systems.py` bytes | §19.6 frozen module | step 4 test, SHA-256 equals `da5cc479476a48ace90d5619297530687145e574c16b762ccc760b983ef2f3a7` | yes, digest computed from the module source |
-| `CLAUDE.md` bytes | §19.1 block, UTF-8, one trailing LF | step 1 Verify, SHA-256 equals `83a6bd88c7b1759801a38c726daa94bf48633960567204fd8e08a5b5c8d9d887` | yes |
+| `CLAUDE.md` bytes | §19.1 block, UTF-8, one trailing LF | step 1 Verify, SHA-256 equals `c0c057439f0ee06b9d30cb9666e52580a89189f3b51b60d44c8fe03b18d83373` | yes |
 | `AGENTS.md` bytes | base-commit `AGENTS.md` plus the line `Build, lint, test and eval commands: see CLAUDE.md (canonical).` and one LF | step 1 Verify, `cmp` | yes |
 | SYNTHETIC banner | step 6 literal | step 6 test, line 3 string equality | yes |
 | `docs/field-record.md` bytes | `render(CARDS)` from §14 literals | step 7 test (f), byte equality incl. CRLF mutation | yes |
 | operating-record paragraph | §19.6 literal | step 10 test (d), string equality | yes |
 | README section bodies | §19.6 section literals | step 10 test (c), string equality | yes |
-| `docs/runbook.md` bytes | §19.6 runbook literal | step 8 test, byte equality | yes |
-| expected published outcome | §4 formulas, `round(x, 4)`; §5 `:.4f` print format. Property (producing code does not exist before the build): baseline `n=34, correct=18, answered=34, wrong_auto_routes=16`, `round(18/34,4)=0.5294`; improved `n=34, correct=29, answered=29, wrong_auto_routes=0`, `round(29/34,4)=0.8529`, `round(29/29,4)=1.0` | step 5 test (c) against `/tmp/fde-py312/bin/python docs/worked-engagement/run_eval.py` stdout | property checked 2026-11-23 with `/tmp/fde-py312/bin/python3 -c` in /tmp; byte lines confirmed only after the build |
+| `docs/runbook.md` bytes | §19.6 runbook literal | step 8 test, byte equality and SHA-256 `e61230997a70eaf0dc4e86a3c782a7a5969f0c4c6b9245f45f3b8f8b08833833` | yes |
+| expected published outcome | §4 formulas, `round(x, 4)`; §5 `:.4f` print format. Property (producing code does not exist before the build): baseline `n=34, correct=18, answered=34, wrong_auto_routes=16`, `round(18/34,4)=0.5294`; improved `n=34, correct=29, answered=29, wrong_auto_routes=0`, `round(29/34,4)=0.8529`, `round(29/29,4)=1.0` | chain: step 5 test (a) stdout equals lines built from the JSON, (b) fresh JSON equals saved, (c) saved equals these values | property checked 2026-11-23 with `/tmp/fde-py312/bin/python3 -c` in /tmp; byte lines confirmed only after the build |
 | saved run bytes | §4 UTF-8 canonical JSON | step 5 test (d), bytes equality | yes |
 
 Runtime confirmation of these rows is recorded only after the builder runs those tests.
@@ -1022,7 +1035,8 @@ in the engagement README are compared against the run files by step 6's test.
 | pytest src path | `pythonpath = ["src"]` | §19.6 block | §19.6 resolution matrix | yes |
 | field-record section literal | `Every claim in [docs/field-record.md](docs/field-record.md) is confirmed against the maintainer's private career record, employers appear as sector pseudonyms, and the gaps are listed rather than filled.` | §19.6 | step 10 Do, step 10 test (c) | yes |
 | engagement section literal | `[docs/worked-engagement/README.md](docs/worked-engagement/README.md) is a synthetic ticket-routing engagement: a frozen 34-item eval set, a baseline and an improved router, and results that one command reproduces byte for byte.` | §19.6 | step 10 Do, step 10 test (c) | yes |
-| runbook literal | `docs/runbook.md` bytes = the fenced `markdown` block under "Runbook literal" in §19.6, first line `# Runbook` | §19.6 | step 8 Do, step 8 test | yes |
+| runbook bytes | SHA-256 `e61230997a70eaf0dc4e86a3c782a7a5969f0c4c6b9245f45f3b8f8b08833833` of the §19.6 runbook body plus one LF | §19.6 | step 8 test | yes |
+| runbook command | `python3 docs/worked-engagement/run_eval.py && git diff --exit-code HEAD -- docs/worked-engagement/runs` | §19.6 runbook literal | step 8 Verify, gate G | yes |
 | reader runtime requirement | `Requires Python 3.10 or newer, standard library only.` | step 6 Do (`## Rerun`) | §19.6 runbook literal, step 6 test | yes |
 | AGENTS.md bridge line | `Build, lint, test and eval commands: see CLAUDE.md (canonical).` | step 1 Do | step 1 Verify, gate G, §19.2 | yes |
 | census pattern | `\b\d[\d,]*\s*(?:-\|\s)?(?:\w+\s+){0,2}repo(?:s\|sitory\|sitories)?\b` | step 10 test (d) | none | yes |
@@ -1051,6 +1065,16 @@ in the engagement README are compared against the run files by step 6's test.
 | distribution name | `fde-portfolio` (`[project] name`) | `pyproject.toml` (base) | §1, §5 | yes |
 | console script | `fde-portfolio = "fde_portfolio.cli:main"` | `pyproject.toml` `[project.scripts]` (base) | §19.6 matrix, `/tmp/fde-py312/bin/fde-portfolio` | yes |
 | public boundary literal | `The public boundary for this repository is in [docs/public-boundary.md](docs/public-boundary.md). Customers and employers appear only as sector pseudonyms, and every claim is a confirmed fact.` | step 10 Do | step 10 test (i) | yes |
+| rerun heading | `## Rerun` | step 6 Do | step 6 test | yes |
+| results heading | `## Results` | step 6 Do | step 6 test | yes |
+| results header | `\| system \| accuracy \| answered_accuracy \| coverage \| wrong_auto_routes \|` | step 6 Do | step 6 test | yes |
+| results separator | `\|---\|---\|---\|---\|---\|` | step 6 Do | step 6 test | yes |
+| field-record title | `# Field record` | step 7 `render` | step 7 test (f) | yes |
+| taxonomy header | `\| Class \| Seen in \| Detection signal \| Mitigation \|` | step 8 Do | step 8 test | yes |
+| ADR headings | `## Context`, `## Decision`, `## Consequences`, `## Alternatives rejected` | step 9 Do | step 9 test | yes |
+| README pytest row | `\| \`pytest -q --cov\` \| the full suite passes \| \`pytest -q --cov\` \|` | step 10 Do | step 10 test (h) | yes |
+| README tests row | `\| \`tests/\` \| tests covering schema, render, CLI, drift scans, repo hygiene, the eval and the docs \|` | step 10 Do | step 10 test (h) | yes |
+| public boundary heading | `## Public Boundary` | step 10 Do | step 10 test (i) | yes |
 | bridge file | `AGENTS.md` | §19.2 | §19 intro, §19.1 rules | yes |
 | field-record legend | `Every claim below is [confirmed] against the maintainer's private career record. Employers and clients appear as sector pseudonyms. Gaps are listed, not filled.` | §14 | step 7 `CARDS`/`render` | yes |
 | field-record table header | `\| Engagement \| Years \| Sector \|` | step 7 | §14 table | yes |
@@ -1163,8 +1187,16 @@ uv pip install --python /tmp/fde-py312/bin/python -e '.[dev]'
 /tmp/fde-py312/bin/python -m pytest -q   # expect: exit 0, 0 failed
 git diff --exit-code HEAD -- pyproject.toml   # expect: exit 0, manifest unchanged by the rerun
 /tmp/fde-py312/bin/fde-portfolio check   # expect: exit 0, installed CLI works after the rerun
+test ! -e .rig/proofs   # expect: exit 0, no proof file added by this build
 ```
 
+
+Completion proof (per `AGENTS.md`: four ratios >= 0.85 and a sealed proof; `.rig/loop.yaml`
+`always_on: [gate-d-loop, proof-loop]`): this build adds no file under `.rig/`, so CI's
+`rig-proof-gate verify .rig/proofs --strict` step stays skipped by its `hashFiles('.rig/proofs/**/*.json')`
+condition; `test ! -e .rig/proofs` is the last line of the gate above. The sealed proof packet, with all
+four ratios >= 0.85 and naming `git rev-parse HEAD`, is produced after the gate by the owner's proof
+loop outside this repository; the build is not reported done until that packet exists.
 
 Post-build launch checklist (not gates, per `docs/public-boundary.md`): `flag-gate.sh` PASS (the
 maintainer's approved copy, outside this repository); a human review of history and large blobs; the
