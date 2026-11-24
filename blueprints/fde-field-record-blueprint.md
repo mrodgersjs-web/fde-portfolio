@@ -182,7 +182,9 @@ NOT APPLICABLE — no service, no users, no secrets.
 Checkpoint. Every Verify block exits 0 on a correct step under `set -e`. Before each Checkpoint the builder also runs `/tmp/fde-py312/bin/python -m pytest -q` (full suite,
 expect exit 0, 0 failed), which covers every prior step's pytest verify. Each Checkpoint stages only
 that step's declared paths, asserts the staged list equals them, commits, and tags locally. Tags are
-never pushed. Rollback for step N: `git reset --hard <previous tag>` as named in the step map, then
+never pushed. Rollback for step N: `git reset --hard <previous tag>` as named in the step map (restores tracked
+files), then for each path in step N's Touches column that does not exist at that tag
+(`git cat-file -e <previous tag>:<path>` exits nonzero) remove it with `rm -f <path>`, then
 delete every step tag numbered N or higher that this run created (`git tag -d step-NN-...` for each
 such tag present), then confirm every remaining step tag is an ancestor of `HEAD` with
 `for t in $(git tag -l 'step-*'); do git merge-base --is-ancestor "$t" HEAD || exit 1; done`; for
@@ -225,17 +227,16 @@ grep -qx 'norecursedirs = \["blueprints", ".venv", ".git"\]' pyproject.toml  # e
 ```
 **Checkpoint.**
 ```bash
-git add CLAUDE.md pyproject.toml
-test "$(git diff --cached --name-only | LC_ALL=C sort | tr '\n' ' ')" = "CLAUDE.md pyproject.toml "
-git commit -m "step 1: workspace" && git tag step-01-workspace
+git add CLAUDE.md pyproject.toml && test "$(git diff --cached --name-only | LC_ALL=C sort | tr '\n' ' ')" = "CLAUDE.md pyproject.toml " && git commit -m "step 1: workspace" && git tag step-01-workspace
 ```
 
 ### Step 2 — eval set and loader (`eval-set`)
 **Do.** Write `docs/worked-engagement/eval-set.jsonl` byte for byte as the frozen fixture in §19.6
 (34 SYNTHETIC tickets, ids `T001`..`T034`, all five routes present). Write `docs/worked-engagement/scorer.py`
 with `ROUTES` and `load_eval` per §5. Write `tests/test_scorer.py` that inserts
-`docs/worked-engagement` at `sys.path[0]` and tests: the shipped set loads 34 items with all five
-labels; a duplicate id, a missing key and an unknown label each raise `ValueError` (via `tmp_path`).
+`docs/worked-engagement` at `sys.path[0]` and tests: the shipped file's SHA-256 equals
+`dae205e9367083d71fb820a1a68ecb9755c4c2f0b03d7763ed50598714cc62d5` (the §19.6 fixture); the shipped set
+loads 34 items with all five labels; a duplicate id, a missing key and an unknown label each raise `ValueError` (via `tmp_path`).
 
 **Done when.**
 - WHEN `load_eval` reads the shipped set THE SYSTEM SHALL return 34 items carrying 5 distinct labels.
@@ -249,9 +250,7 @@ labels; a duplicate id, a missing key and an unknown label each raise `ValueErro
 ```
 **Checkpoint.**
 ```bash
-git add docs/worked-engagement/eval-set.jsonl docs/worked-engagement/scorer.py tests/test_scorer.py
-test "$(git diff --cached --name-only | LC_ALL=C sort | tr '\n' ' ')" = "docs/worked-engagement/eval-set.jsonl docs/worked-engagement/scorer.py tests/test_scorer.py "
-git commit -m "step 2: eval-set" && git tag step-02-eval-set
+git add docs/worked-engagement/eval-set.jsonl docs/worked-engagement/scorer.py tests/test_scorer.py && test "$(git diff --cached --name-only | LC_ALL=C sort | tr '\n' ' ')" = "docs/worked-engagement/eval-set.jsonl docs/worked-engagement/scorer.py tests/test_scorer.py " && git commit -m "step 2: eval-set" && git tag step-02-eval-set
 ```
 
 ### Step 3 — score function (`score`)
@@ -273,15 +272,14 @@ leaves `wrong_auto_routes` 0; one wrong route counts 1 wrong auto route; zero an
 ```
 **Checkpoint.**
 ```bash
-git add docs/worked-engagement/scorer.py tests/test_scorer.py
-test "$(git diff --cached --name-only | LC_ALL=C sort | tr '\n' ' ')" = "docs/worked-engagement/scorer.py tests/test_scorer.py "
-git commit -m "step 3: score" && git tag step-03-score
+git add docs/worked-engagement/scorer.py tests/test_scorer.py && test "$(git diff --cached --name-only | LC_ALL=C sort | tr '\n' ' ')" = "docs/worked-engagement/scorer.py tests/test_scorer.py " && git commit -m "step 3: score" && git tag step-03-score
 ```
 
 ### Step 4 — two systems (`systems`)
 **Do.** Write `docs/worked-engagement/systems.py` byte for byte as the frozen module in §19.6
 (baseline: ordered first-match substring rules, confidence 1.0, fallback `other`; improved: fixed
-substring weights, negation regex, abstain when the top score is under 2 or leads by less than 1). Write `tests/test_systems.py` with:
+substring weights, negation regex, abstain when the top score is under 2 or leads by less than 1). Write `tests/test_systems.py` with: the file's SHA-256 equals
+`da5cc479476a48ace90d5619297530687145e574c16b762ccc760b983ef2f3a7` (the §19.6 module);
 `baseline` never returns `None` on the shipped set; `improved("Someone used my card in another
 country, I did not make this purchase")` returns `fraud`; `improved("Hello")` returns route `None`;
 `improved("Not a fraud issue, I just need a copy of last month's invoice")` returns `billing`.
@@ -298,21 +296,22 @@ country, I did not make this purchase")` returns `fraud`; `improved("Hello")` re
 ```
 **Checkpoint.**
 ```bash
-git add docs/worked-engagement/systems.py tests/test_systems.py
-test "$(git diff --cached --name-only | LC_ALL=C sort | tr '\n' ' ')" = "docs/worked-engagement/systems.py tests/test_systems.py "
-git commit -m "step 4: systems" && git tag step-04-systems
+git add docs/worked-engagement/systems.py tests/test_systems.py && test "$(git diff --cached --name-only | LC_ALL=C sort | tr '\n' ' ')" = "docs/worked-engagement/systems.py tests/test_systems.py " && git commit -m "step 4: systems" && git tag step-04-systems
 ```
 
 ### Step 5 — runner and saved runs (`runs`)
 **Do.** Write `docs/worked-engagement/run_eval.py` per §5 with an optional `--out DIR` (default: the
 `runs/` folder beside the script). Run `/tmp/fde-py312/bin/python docs/worked-engagement/run_eval.py` once to
 write the two run files. Extend `tests/test_systems.py` with a fixture `fresh_runs(tmp_path)` that runs the CLI into that
-test's own `tmp_path` and returns `(stdout, tmp_path)`, and three tests: (a) runs `[sys.executable, "docs/worked-engagement/run_eval.py", "--out", str(tmp_path)]` with
+test's own `tmp_path` and returns `(stdout, tmp_path)`, and four tests (a)-(d): (a) runs `[sys.executable, "docs/worked-engagement/run_eval.py", "--out", str(tmp_path)]` with
 `subprocess.run(capture_output=True, text=True)`, asserts return code 0, and asserts
 `stdout.splitlines()` equals exactly `[line(b), line(i)]`, where `b` and `i` are the JSON objects read
 from `tmp_path/baseline.json` and `tmp_path/improved.json` and
 `line(d) = f"{d['system']} accuracy={d['accuracy']:.4f} answered_accuracy={d['answered_accuracy']:.4f} coverage={d['coverage']:.4f} wrong_auto_routes={d['wrong_auto_routes']}"`
-(the runner prints with this same format); (b) using `fresh_runs`, both files in its `tmp_path` are byte-identical to the working-tree
+(the runner prints with this same format); (d) for each saved run, the key set is exactly `{system, n, answered, abstained, correct,
+wrong_auto_routes, accuracy, answered_accuracy, coverage, predictions}`, `[p["id"] for p in predictions]`
+equals the eval-set id order, each prediction has keys exactly `{id, route, confidence}`, and the file
+bytes equal `json.dumps(json.loads(bytes), indent=2, sort_keys=True) + "\n"`; (b) using `fresh_runs`, both files in its `tmp_path` are byte-identical to the working-tree
 `docs/worked-engagement/runs/baseline.json` and `docs/worked-engagement/runs/improved.json` written
 earlier in this step (the committed-byte check is in §20.1); (c) in the saved runs, improved `wrong_auto_routes` is
 lower than baseline's, improved `answered_accuracy` is higher than baseline's, and improved
@@ -331,18 +330,19 @@ lower than baseline's, improved `answered_accuracy` is higher than baseline's, a
 ```
 **Checkpoint.**
 ```bash
-git add docs/worked-engagement/run_eval.py docs/worked-engagement/runs/baseline.json docs/worked-engagement/runs/improved.json tests/test_systems.py
-test "$(git diff --cached --name-only | LC_ALL=C sort | tr '\n' ' ')" = "docs/worked-engagement/run_eval.py docs/worked-engagement/runs/baseline.json docs/worked-engagement/runs/improved.json tests/test_systems.py "
-git commit -m "step 5: runs" && git tag step-05-runs
+git add docs/worked-engagement/run_eval.py docs/worked-engagement/runs/baseline.json docs/worked-engagement/runs/improved.json tests/test_systems.py && test "$(git diff --cached --name-only | LC_ALL=C sort | tr '\n' ' ')" = "docs/worked-engagement/run_eval.py docs/worked-engagement/runs/baseline.json docs/worked-engagement/runs/improved.json tests/test_systems.py " && git commit -m "step 5: runs" && git tag step-05-runs
 ```
 
 ### Step 6 — worked engagement README (`engagement-readme`)
 **Do.** Write `docs/worked-engagement/README.md`. Line 1 `# Worked engagement: payments ticket routing`,
 line 2 blank, line 3 exactly the banner literal `> SYNTHETIC. Fictional company, fictional tickets. Every number below is produced by run_eval.py.` (no backticks inside it)
-Then sections `## Brief`, `## Constraints`, `## Method`, `## Results`, `## Rerun`. Under `## Results`
+Then sections `## Brief`, `## Constraints`, `## Method`, `## Results`, `## Rerun`. Under `## Rerun`
+the line `Requires Python 3.10 or newer, standard library only.` and a fenced bash block holding
+exactly `python3 docs/worked-engagement/run_eval.py`. Under `## Results`
 a table with header `| system | accuracy | answered_accuracy | coverage | wrong_auto_routes |` and one
 row per system in baseline-then-improved order, each equal to `row(d)` below built from that system's saved run file.
-Create `tests/test_docs.py` with a test that reads both run files and asserts line 3 equals the
+Create `tests/test_docs.py` with a test that asserts the `## Rerun` section contains the line
+`python3 docs/worked-engagement/run_eval.py`, reads both run files and asserts line 3 equals the
 SYNTHETIC banner and that, for `d` in (baseline, improved), the full line
 `row(d) = f"| {d['system']} | {d['accuracy']:.4f} | {d['answered_accuracy']:.4f} | {d['coverage']:.4f} | {d['wrong_auto_routes']} |"`
 is checked inside the `## Results` section only (lines after `## Results` up to the next `## `
@@ -352,6 +352,7 @@ line): its table lines are exactly, in order, the header
 
 **Done when.**
 - WHEN the README's line 3 is read THE SYSTEM SHALL equal the SYNTHETIC banner.
+- WHEN the `## Rerun` section is read THE SYSTEM SHALL contain the line `python3 docs/worked-engagement/run_eval.py`.
 - WHEN the `## Results` section is parsed THE SYSTEM SHALL find exactly the header, separator, baseline row and improved row, in that order.
 
 **Verify.**
@@ -361,9 +362,7 @@ line): its table lines are exactly, in order, the header
 ```
 **Checkpoint.**
 ```bash
-git add docs/worked-engagement/README.md tests/test_docs.py
-test "$(git diff --cached --name-only | LC_ALL=C sort | tr '\n' ' ')" = "docs/worked-engagement/README.md tests/test_docs.py "
-git commit -m "step 6: engagement-readme" && git tag step-06-engagement-readme
+git add docs/worked-engagement/README.md tests/test_docs.py && test "$(git diff --cached --name-only | LC_ALL=C sort | tr '\n' ' ')" = "docs/worked-engagement/README.md tests/test_docs.py " && git commit -m "step 6: engagement-readme" && git tag step-06-engagement-readme
 ```
 
 ### Step 7 — field record (`field-record`)
@@ -382,7 +381,8 @@ order; (b) for each card, the bullets under `**Evidence.**` equal exactly `[f"- 
 in claims]` and the bullets under `**Not yet evidenced.**` equal exactly `[f"- {g}" for g in gaps]`;
 (c) the file contains no `[inferred]` and no `[unverified]`, and every bullet line in the file is one
 of the bullets in (b); (d) every number token matching `\d[\d,]*(\.\d+)?` is in `ALLOWED_NUMBERS`;
-(e) none of the §14 forbidden terms appears (case-insensitive); (f) the whole file equals
+(e) every line starting `### ` is one of the four §14 deployment pseudonyms (the exact pseudonym
+allowlist); (f) the whole file equals
 `render(CARDS)` byte for byte, where `render` builds exactly: `# Field record`, blank, legend, blank,
 the table header, separator and four rows, then for each card a blank line, `### <Deployment>`, blank,
 `**Evidence.**`, blank, its claim bullets, blank, `**Not yet evidenced.**`, blank, its gap bullets,
@@ -395,6 +395,7 @@ nothing but this layout by hand; test (f) is the gate.
 **Done when.**
 - WHEN the field record is parsed THE SYSTEM SHALL find the four §14 rows and four cards, each card's claims equal to its §14 claims with label `[confirmed]`.
 - WHEN a claim bullet differs from its §14 text or label THE SYSTEM SHALL fail test (b) or (c).
+- WHEN a card heading is not a §14 pseudonym THE SYSTEM SHALL fail test (e).
 - WHEN any line outside the rendered layout appears, including extra prose, THE SYSTEM SHALL fail test (f), proven by test (g).
 
 **Verify.**
@@ -404,9 +405,7 @@ nothing but this layout by hand; test (f) is the gate.
 ```
 **Checkpoint.**
 ```bash
-git add docs/field-record.md tests/test_field_record.py
-test "$(git diff --cached --name-only | LC_ALL=C sort | tr '\n' ' ')" = "docs/field-record.md tests/test_field_record.py "
-git commit -m "step 7: field-record" && git tag step-07-field-record
+git add docs/field-record.md tests/test_field_record.py && test "$(git diff --cached --name-only | LC_ALL=C sort | tr '\n' ' ')" = "docs/field-record.md tests/test_field_record.py " && git commit -m "step 7: field-record" && git tag step-07-field-record
 ```
 
 ### Step 8 — failure taxonomy and runbook (`ops-docs`)
@@ -415,13 +414,14 @@ git commit -m "step 7: field-record" && git tag step-07-field-record
 worked-engagement classes `confident wrong route`, `negation flip` and `empty or vague ticket`.
 Write `docs/runbook.md` with sections `## Rerun the eval`, `## Add an eval item`,
 `## Change a field-record fact`, `## Roll back`. Under each heading a fenced bash block holds the
-exact commands: Rerun: `/tmp/fde-py312/bin/python docs/worked-engagement/run_eval.py` then
+exact commands (any Python 3.10+; `python3` below): Rerun: `python3 docs/worked-engagement/run_eval.py` then
 `git diff --exit-code -- docs/worked-engagement/runs`; Add an eval item: append one line to
 `docs/worked-engagement/eval-set.jsonl`, rerun the runner, update the expected outcome in the step 2
-and step 5 tests and the Results table, then `/tmp/fde-py312/bin/python -m pytest -q`; Change a
+and step 5 tests and the Results table, then `python3 -m pytest -q`; Change a
 field-record fact: edit `CARDS` and `ALLOWED_NUMBERS` in `tests/test_field_record.py` from the
-confirmed record only, regenerate the file, then `/tmp/fde-py312/bin/python -m pytest -q tests/test_field_record.py`;
-Roll back: `git reset --hard <previous step tag>` and `git tag -d <later step tags>`. Extend `tests/test_docs.py`: the taxonomy has the
+confirmed record only, regenerate the file, then `python3 -m pytest -q tests/test_field_record.py`;
+Roll back: `T=step-09-adrs` (set to the checkpoint to return to), `git rev-parse -q --verify "refs/tags/$T"`,
+`git reset --hard "$T"`, then `for t in $(git tag -l 'step-*'); do git merge-base --is-ancestor "$t" HEAD || git tag -d "$t"; done`. Extend `tests/test_docs.py`: the taxonomy has the
 header and at least 6 data rows and names the three classes; the runbook has the four exact headings, and the section under each heading contains its named
 command literal (`run_eval.py`, `eval-set.jsonl`, `tests/test_field_record.py`, `git reset --hard`).
 
@@ -435,9 +435,7 @@ command literal (`run_eval.py`, `eval-set.jsonl`, `tests/test_field_record.py`, 
 ```
 **Checkpoint.**
 ```bash
-git add docs/failure-taxonomy.md docs/runbook.md tests/test_docs.py
-test "$(git diff --cached --name-only | LC_ALL=C sort | tr '\n' ' ')" = "docs/failure-taxonomy.md docs/runbook.md tests/test_docs.py "
-git commit -m "step 8: ops-docs" && git tag step-08-ops-docs
+git add docs/failure-taxonomy.md docs/runbook.md tests/test_docs.py && test "$(git diff --cached --name-only | LC_ALL=C sort | tr '\n' ' ')" = "docs/failure-taxonomy.md docs/runbook.md tests/test_docs.py " && git commit -m "step 8: ops-docs" && git tag step-08-ops-docs
 ```
 
 ### Step 9 — ADRs (`adrs`)
@@ -457,9 +455,7 @@ exact paths.
 ```
 **Checkpoint.**
 ```bash
-git add docs/adr/0001-deterministic-offline-eval.md docs/adr/0002-confidence-gate-abstain-to-human.md docs/adr/0003-claim-labels-and-pseudonyms.md tests/test_docs.py
-test "$(git diff --cached --name-only | LC_ALL=C sort | tr '\n' ' ')" = "docs/adr/0001-deterministic-offline-eval.md docs/adr/0002-confidence-gate-abstain-to-human.md docs/adr/0003-claim-labels-and-pseudonyms.md tests/test_docs.py "
-git commit -m "step 9: adrs" && git tag step-09-adrs
+git add docs/adr/0001-deterministic-offline-eval.md docs/adr/0002-confidence-gate-abstain-to-human.md docs/adr/0003-claim-labels-and-pseudonyms.md tests/test_docs.py && test "$(git diff --cached --name-only | LC_ALL=C sort | tr '\n' ' ')" = "docs/adr/0001-deterministic-offline-eval.md docs/adr/0002-confidence-gate-abstain-to-human.md docs/adr/0003-claim-labels-and-pseudonyms.md tests/test_docs.py " && git commit -m "step 9: adrs" && git tag step-09-adrs
 ```
 
 ### Step 10 — README reorder and smoke (`readme`)
@@ -501,9 +497,7 @@ bash scripts/smoke.sh            # expect: exit 0, prints fde-portfolio smoke PA
 ```
 **Checkpoint.**
 ```bash
-git add README.md scripts/smoke.sh tests/test_docs.py
-test "$(git diff --cached --name-only | LC_ALL=C sort | tr '\n' ' ')" = "README.md scripts/smoke.sh tests/test_docs.py "
-git commit -m "step 10: readme" && git tag step-10-readme
+git add README.md scripts/smoke.sh tests/test_docs.py && test "$(git diff --cached --name-only | LC_ALL=C sort | tr '\n' ' ')" = "README.md scripts/smoke.sh tests/test_docs.py " && git commit -m "step 10: readme" && git tag step-10-readme
 ```
 
 ### 9.1 Parity and cutover
@@ -605,9 +599,12 @@ Gaps (each written publicly as `- <gap>`):
 `ALLOWED_NUMBERS` (verbatim for `tests/test_field_record.py`): `{"2013", "2019", "2020", "2021",
 "2025", "2026", "3", "4", "6", "8", "12", "15", "20", "30", "80"}`.
 
-Forbidden terms (verbatim, case-insensitive): `Oracle`, `Advocate`, `Aurora`, `EmOpti`, `Avis`, `$`,
-`salary`, `compensation`, `Snowflake`, `Databricks`, `Salesforce`, `UiPath`, `P&C`.
-No IPs, hostnames, emails or customer names (`docs/public-boundary.md`).
+Real-name redaction inputs (employer and client names, the never-claim list) stay outside the
+repository and are never written into any committed file, test or this blueprint; the committed test
+enforces the positive pseudonym allowlist plus test (f) whole-document equality instead. Scope of the
+contact rule: `docs/field-record.md` and `docs/worked-engagement/` hold no IP, hostname, email or real
+name. The README keeps its existing footer (`rodgersintelligence.com`, required by
+`tests/test_repo_hygiene.py`); that is the maintainer's public site, not a customer detail.
 
 ## 15. Accessibility
 No new images are added; the three existing badges keep their alt text. All tables have header rows.
@@ -657,9 +654,8 @@ Unchanged existing file (bridge file; points to `bash scripts/smoke.sh`). Step 1
 
 ### 19.3 `.claude/settings.json`
 Builder-session allowlist, not committed. Activation, before §10 Bootstrap: an unattended
-Claude Code builder copies this block to `.claude/settings.local.json` (git ignores it via the
-builder's global excludes; it is never staged, because every Checkpoint stages explicit paths and
-asserts the staged list) or passes it with `claude --settings <file>`; an Aside or Codex builder runs
+Claude Code builder writes this block to `/tmp/fde-claude-settings.json` (outside the checkout,
+so `git status --porcelain` stays clean) and starts with `claude --settings /tmp/fde-claude-settings.json`; an Aside or Codex builder runs
 under its own session approval and needs no file. Each subcommand of every Verify, Checkpoint,
 Bootstrap and §20.1 line has an entry, including the ten exact `git tag` commands:
 ```json
@@ -693,6 +689,7 @@ Bootstrap and §20.1 line has an entry, including the ten exact `git tag` comman
       "Bash(git tag step-09-adrs)",
       "Bash(git tag step-10-readme)",
       "Bash(git tag -d:*)",
+      "Bash(rm -f:*)",
       "Bash(git tag -l step-*)",
       "Bash(git merge-base --is-ancestor:*)",
       "Bash(git reset --hard:*)",
@@ -855,13 +852,13 @@ Expected published outcome (produced by the frozen fixture and module; step 5 te
 baseline `accuracy=0.5294 answered_accuracy=0.5294 coverage=1.0000 wrong_auto_routes=16`;
 improved `accuracy=0.8529 answered_accuracy=1.0000 coverage=0.8529 wrong_auto_routes=0`.
 
-| Authored literal | Governing rule | First comparison |
-|---|---|---|
-| `eval-set.jsonl` bytes | §19.6 frozen fixture, copied byte for byte | step 2 test (34 items, 5 labels) and step 5 test (c) expected outcome |
-| `systems.py` bytes | §19.6 frozen module, copied byte for byte | step 4 tests and step 5 test (c) |
-| SYNTHETIC banner | step 6 literal | step 6 test, line 3 equality |
-| `docs/field-record.md` bytes | `render(CARDS)` from §14 literals | step 7 test (f) |
-| operating-record paragraph | §19.6 literal | step 10 test (d) |
+| Authored literal | Governing rule | First comparison (comparator) | Both confirmed |
+|---|---|---|---|
+| `eval-set.jsonl` bytes | §19.6 frozen fixture | step 2 test, SHA-256 equals `dae205e9367083d71fb820a1a68ecb9755c4c2f0b03d7763ed50598714cc62d5` | yes, digest computed from the fixture source |
+| `systems.py` bytes | §19.6 frozen module | step 4 test, SHA-256 equals `da5cc479476a48ace90d5619297530687145e574c16b762ccc760b983ef2f3a7` | yes, digest computed from the module source |
+| SYNTHETIC banner | step 6 literal | step 6 test, line 3 string equality | yes |
+| `docs/field-record.md` bytes | `render(CARDS)` from §14 literals | step 7 test (f), string equality | yes |
+| operating-record paragraph | §19.6 literal | step 10 test (d), string equality | yes |
 
 Runtime confirmation of these rows is recorded only after the builder runs those tests.
 
@@ -921,13 +918,19 @@ in the engagement README are compared against the run files by step 6's test.
 | base commit | `15cba0fbc6bf08dfabd060b1ab1e97d0512d22ba` | header | §9, step map, §10 | yes |
 | worked-engagement folder | `docs/worked-engagement/` | §3 | §1 target, §19.1, step 2, step 5 fixture path | yes |
 | editable install extra | `.[dev]` | §10b | §11, §19.1, §19.3 | yes |
+| case studies | `CASE-STUDIES.md` | §3 existing inputs | operating-record literal | yes |
+| smoke input 1 | `docs/implementation-playbook.md` | `scripts/smoke.sh` (base) | §3 existing inputs, step 10 fixture | yes |
+| smoke input 2 | `docs/architecture.md` | `scripts/smoke.sh` (base) | §3 existing inputs, step 10 fixture | yes |
+| smoke input 3 | `docs/evaluation-strategy.md` | `scripts/smoke.sh` (base) | §3 existing inputs, step 10 fixture | yes |
+| smoke input 4 | `docs/public-boundary.md` | `scripts/smoke.sh` (base) | §3 existing inputs, step 10 fixture | yes |
+| hygiene test | `tests/test_repo_hygiene.py` | §3 existing inputs | step 10 Do | yes |
 | bridge file | `AGENTS.md` | §19.2 | §19 intro, §19.1 rules | yes |
 | field-record legend | `Every claim below is [confirmed] against the maintainer's private career record. Employers and clients appear as sector pseudonyms. Gaps are listed, not filled.` | §14 | step 7 `CARDS`/`render` | yes |
 | field-record table header | `\| Deployment \| Years \| Sector \|` | step 7 | §14 table | yes |
 | field-record card labels | `**Evidence.**`, `**Not yet evidenced.**` | step 7 | none | yes |
 | field-record claims and gaps | the 15 claim strings and 4 gap strings in §14, exact | §14 | step 7 `CARDS` | yes |
 | `ALLOWED_NUMBERS` | `{"2013", "2019", "2020", "2021", "2025", "2026", "3", "4", "6", "8", "12", "15", "20", "30", "80"}` | §14 | step 7 test (d) | yes |
-| operating-record body | the §19.6 operating-record literal | §19.6 | step 10 | yes |
+| operating-record body | `The playbooks above are the method; [CASE-STUDIES.md](CASE-STUDIES.md) holds six dated operations on a private AI fleet (storage integrity with hash-gated deletion, a container migration with preserved rollback, GPU serving restores behind idle gates, model-routing reconciliation, an MCP process-leak lifecycle fix). Every case names its evidence tier and carries a not-proven line. The case set was gated by an independent 2026-10-30 inventory audit that issued six required corrections before publication.` | §19.6 | step 10 Do, step 10 test (d) | yes |
 | step tag 1 | `step-01-workspace` | §20.1 | step 1 Checkpoint, §10, §12, §19.3 | yes |
 | step tag 2 | `step-02-eval-set` | §20.1 | step 2 Checkpoint, §10, §12, §19.3 | yes |
 | step tag 3 | `step-03-score` | §20.1 | step 3 Checkpoint, §10, §12, §19.3 | yes |
