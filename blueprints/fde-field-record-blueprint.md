@@ -174,7 +174,10 @@ NOT APPLICABLE — no service, no users, no secrets.
 §10 Bootstrap runs once before step 1. Steps run in order; each runs Do, Done when, Verify, then
 Checkpoint. Every Verify block exits 0 on a correct step under `set -e`. Each Checkpoint stages only
 that step's declared paths, asserts the staged list equals them, commits, and tags locally. Tags are
-never pushed. Rollback for step N is `git reset --hard <previous tag>` as named in the step map; for
+never pushed. Rollback for step N: `git reset --hard <previous tag>` as named in the step map, then
+delete every step tag numbered N or higher that this run created (`git tag -d step-NN-...` for each
+such tag present), then confirm every remaining step tag is an ancestor of `HEAD` with
+`for t in $(git tag -l 'step-*'); do git merge-base --is-ancestor "$t" HEAD || exit 1; done`; for
 step 1 it is the recorded pre-build tip, `git reset --hard "$(cat /tmp/fde-build-start)"`.
 
 ### Step map
@@ -201,6 +204,7 @@ branch before Bootstrap, and §10 verifies it is tracked.
 **Done when.**
 - WHEN `/tmp/fde-py312/bin/python -m pytest -q` runs THE SYSTEM SHALL exit 0 with 0 failed.
 - WHEN `/tmp/fde-py312/bin/ruff check .` runs THE SYSTEM SHALL exit 0.
+- WHEN `/tmp/fde-py312/bin/fde-portfolio check` runs THE SYSTEM SHALL exit 0.
 - WHEN `pyproject.toml` is read THE SYSTEM SHALL contain the literal `"blueprints"` in both `extend-exclude` and `norecursedirs`.
 
 **Verify.**
@@ -209,6 +213,7 @@ branch before Bootstrap, and §10 verifies it is tracked.
 /tmp/fde-py312/bin/ruff check .               # expect: exit 0
 grep -qx 'extend-exclude = \["mcp", ".rig", "blueprints"\]' pyproject.toml   # expect: exit 0
 grep -qx 'norecursedirs = \["blueprints", ".venv", ".git"\]' pyproject.toml  # expect: exit 0
+/tmp/fde-py312/bin/fde-portfolio check   # expect: exit 0, installed console script works
 ```
 **Checkpoint.**
 ```bash
@@ -443,15 +448,16 @@ image line is added; the owner inserts media under the H1 in a later commit). In
 `## Why this exists`, the section `## Field record` whose body contains the link literal
 `[docs/field-record.md](docs/field-record.md)`, then the section `## Worked engagement (synthetic)`
 whose body contains the link literal `[docs/worked-engagement/README.md](docs/worked-engagement/README.md)`.
-Rename `## Quick start (5 lines)` to `## Quick start` and keep it after both new sections. Rewrite the
-`## The operating record` paragraph so it carries no repository count (no `366`, no `-repo`). Keep the
+Rename `## Quick start (5 lines)` to `## Quick start` and keep it after both new sections. Replace the
+first paragraph of `## The operating record` with the operating-record literal in §19.6, as one line. Keep the
 CI badge, the `git clone` line, a test command and the footer that `tests/test_repo_hygiene.py`
 requires. In `scripts/smoke.sh` add `docs/field-record.md docs/runbook.md docs/failure-taxonomy.md`
 to the `for f in` list. Extend `tests/test_docs.py`: (a) the README's `![` lines are exactly the three badge lines of the base commit (CI, license, python), byte-identical and in their base positions 5-7, and no other line contains `![`;
 (b) the full lines `## Field record`, `## Worked engagement (synthetic)`, `## Quick start` appear in
 that order; (c) the text between `## Field record` and the next `## ` line contains the field-record
 link literal, the text between `## Worked engagement (synthetic)` and the next `## ` line contains the
-engagement link literal, and both link targets exist on disk; (d) neither `366` nor `-repo` appears;
+engagement link literal, and both link targets exist on disk; (d) the first paragraph under `## The operating record` equals the §19.6 operating-record literal
+exactly, and neither `366` nor `-repo` appears anywhere;
 (e) for each of the three new docs, a fixture copies `scripts/smoke.sh` to `tmp_path/scripts/smoke.sh` and
 copies each of the eight files in its `for f in` list to the same repository-relative path under
 `tmp_path` (for example `tmp_path/docs/runbook.md`); with all eight present
@@ -491,7 +497,8 @@ blocks: 10a runs once before step 1; 10b is repeatable and exits 0 on every line
 git show-ref -q --verify refs/heads/aside/tier2-portfolio-20261123   # expect: exit 0; the prepared branch exists
 git switch aside/tier2-portfolio-20261123
 git merge-base --is-ancestor 15cba0fbc6bf08dfabd060b1ab1e97d0512d22ba HEAD   # expect: exit 0
-git ls-files --error-unmatch blueprints/fde-field-record-blueprint.md   # expect: exit 0, the blueprint is committed
+git cat-file -e HEAD:blueprints/fde-field-record-blueprint.md   # expect: exit 0, HEAD contains the blueprint
+test -z "$(git status --porcelain)"   # expect: exit 0, index and worktree clean
 for t in step-01-workspace step-02-eval-set step-03-score step-04-systems step-05-runs step-06-engagement-readme step-07-field-record step-08-ops-docs step-09-adrs step-10-readme; do if git rev-parse -q --verify "refs/tags/$t" >/dev/null; then echo "tag conflict: $t -> $(git rev-parse "refs/tags/$t")"; exit 1; fi; done   # expect: exit 0; a pre-existing step tag stops the build, nothing is deleted
 git rev-parse HEAD > /tmp/fde-build-start   # records the pre-build tip
 ```
@@ -664,6 +671,7 @@ Bootstrap and §20.1 line has an entry, including the ten exact `git tag` comman
       "Bash(git tag step-09-adrs)",
       "Bash(git tag step-10-readme)",
       "Bash(git tag -d:*)",
+      "Bash(git tag -l step-*)",
       "Bash(git merge-base --is-ancestor:*)",
       "Bash(git reset --hard:*)",
       "Bash(cat /tmp/fde-build-start)",
@@ -676,6 +684,7 @@ Bootstrap and §20.1 line has an entry, including the ten exact `git tag` comman
       "Bash(git switch:*)",
       "Bash(git show-ref:*)",
       "Bash(git cat-file:*)",
+      "Bash(git status --porcelain)",
       "Bash(git rev-parse:*)",
       "Bash(git diff:*)",
       "Bash(git ls-files:*)",
@@ -715,6 +724,11 @@ Every file a Verify or §20.1 command names is created by a step: `CLAUDE.md`, `
 `tests/test_scorer.py` (2); `tests/test_systems.py` (4); `docs/worked-engagement/run_eval.py` and both
 run files (5); `tests/test_docs.py` (6); `tests/test_field_record.py` (7); `scripts/smoke.sh` edited (10,
 exists on base).
+
+Operating-record literal (step 10, one line, exact):
+```text
+The playbooks above are the method; [CASE-STUDIES.md](CASE-STUDIES.md) holds six dated operations on a private AI fleet (storage integrity with hash-gated deletion, a container migration with preserved rollback, GPU serving restores behind idle gates, model-routing reconciliation, an MCP process-leak lifecycle fix). Every case names its evidence tier and carries a not-proven line. The case set was gated by an independent 2026-10-30 inventory audit that issued six required corrections before publication.
+```
 
 Frozen fixture `docs/worked-engagement/eval-set.jsonl` (exact bytes):
 ```jsonl
@@ -817,6 +831,16 @@ Expected published outcome (produced by the frozen fixture and module; step 5 te
 baseline `accuracy=0.5294 answered_accuracy=0.5294 coverage=1.0000 wrong_auto_routes=16`;
 improved `accuracy=0.8529 answered_accuracy=1.0000 coverage=0.8529 wrong_auto_routes=0`.
 
+| Authored literal | Governing rule | First comparison |
+|---|---|---|
+| `eval-set.jsonl` bytes | §19.6 frozen fixture, copied byte for byte | step 2 test (34 items, 5 labels) and step 5 test (c) expected outcome |
+| `systems.py` bytes | §19.6 frozen module, copied byte for byte | step 4 tests and step 5 test (c) |
+| SYNTHETIC banner | step 6 literal | step 6 test, line 3 equality |
+| `docs/field-record.md` bytes | `render(CARDS)` from §14 literals | step 7 test (f) |
+| operating-record paragraph | §19.6 literal | step 10 test (d) |
+
+Runtime confirmation of these rows is recorded only after the builder runs those tests.
+
 Byte-exact artifact reconciliation: the two run files are never hand-written; `run_eval.py` produces
 them with the §4 serialization and step 5 test (b) compares a fresh run against them. The results rows
 in the engagement README are compared against the run files by step 6's test.
@@ -871,7 +895,15 @@ in the engagement README are compared against the run files by step 6's test.
 | build start record | `/tmp/fde-build-start` | §10 | §12 | yes |
 | branch | `aside/tier2-portfolio-20261123` | header | §10, §12, §19.3 | yes |
 | base commit | `15cba0fbc6bf08dfabd060b1ab1e97d0512d22ba` | header | §9, step map, §10 | yes |
-| field-record literals | legend, rows, claims, gaps, `ALLOWED_NUMBERS` | §14 | step 7 | yes |
+| worked-engagement folder | `docs/worked-engagement/` | §3 | §1 target, §19.1, step 2, step 5 fixture path | yes |
+| editable install extra | `.[dev]` | §10b | §11, §19.1, §19.3 | yes |
+| bridge file | `AGENTS.md` | §19.2 | §19 intro, §19.1 rules | yes |
+| field-record legend | `Every claim below is [confirmed] against the maintainer's private career record. Employers and clients appear as sector pseudonyms. Gaps are listed, not filled.` | §14 | step 7 `CARDS`/`render` | yes |
+| field-record table header | `\| Deployment \| Years \| Sector \|` | step 7 | §14 table | yes |
+| field-record card labels | `**Evidence.**`, `**Not yet evidenced.**` | step 7 | none | yes |
+| field-record claims and gaps | the 15 claim strings and 4 gap strings in §14, exact | §14 | step 7 `CARDS` | yes |
+| `ALLOWED_NUMBERS` | `{"2013", "2019", "2020", "2021", "2025", "2026", "3", "4", "6", "8", "12", "15", "20", "30", "80"}` | §14 | step 7 test (d) | yes |
+| operating-record body | the §19.6 operating-record literal | §19.6 | step 10 | yes |
 | step tag 1 | `step-01-workspace` | §20.1 | step 1 Checkpoint, §10, §12, §19.3 | yes |
 | step tag 2 | `step-02-eval-set` | §20.1 | step 2 Checkpoint, §10, §12, §19.3 | yes |
 | step tag 3 | `step-03-score` | §20.1 | step 3 Checkpoint, §10, §12, §19.3 | yes |
@@ -886,7 +918,9 @@ in the engagement README are compared against the run files by step 6's test.
 ## 20. Acceptance Gate, Risks & Decision Log
 
 ### 20.1 Global acceptance gate
+Run as one script under `set -euo pipefail`; the first nonzero status fails the gate.
 ```bash
+set -euo pipefail
 /tmp/fde-py312/bin/ruff check .                                            # expect: exit 0
 /tmp/fde-py312/bin/python -m pytest -q                                     # expect: exit 0, 0 failed
 /tmp/fde-py312/bin/fde-portfolio check                                     # expect: exit 0
