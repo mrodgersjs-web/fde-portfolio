@@ -203,13 +203,13 @@ recorded SHA itself, `P="$(cat /tmp/fde-build-start)"`, which `git rev-parse` re
 /tmp/fde-py312/bin/ruff check .                     # expect: exit 0
 /tmp/fde-py312/bin/python -m pytest -q              # expect: exit 0, 0 failed
 /tmp/fde-py312/bin/fde-portfolio check              # expect: exit 0
-grep -qx 'extend-exclude = \["mcp", ".rig", "blueprints"\]' pyproject.toml   # expect: exit 0
-grep -qx 'norecursedirs = \["blueprints", ".venv", ".git"\]' pyproject.toml  # expect: exit 0
+grep -Fqx 'extend-exclude = ["mcp", ".rig", "blueprints"]' pyproject.toml   # expect: exit 0
+grep -Fqx 'norecursedirs = ["blueprints", ".venv", ".git"]' pyproject.toml  # expect: exit 0
 test "$(shasum -a 256 CLAUDE.md | cut -d' ' -f1)" = fec1dbdc1c688ade145faa63a548faa55fd8fdb9889eb9ed671a90d622179d3e   # expect: exit 0, CLAUDE.md equals §19.1
 ```
 From step 5 on, G also runs the default (no-argument) runner in an isolated copy:
 ```bash
-d="$(mktemp -d)" && cp -R docs/worked-engagement "$d/we" && /tmp/fde-py312/bin/python "$d/we/run_eval.py" && cmp "$d/we/runs/baseline.json" docs/worked-engagement/runs/baseline.json && cmp "$d/we/runs/improved.json" docs/worked-engagement/runs/improved.json   # expect: exit 0
+d="$(mktemp -d)" && mkdir "$d/we" && cp docs/worked-engagement/run_eval.py docs/worked-engagement/scorer.py docs/worked-engagement/systems.py docs/worked-engagement/eval-set.jsonl "$d/we/" && test ! -e "$d/we/runs" && /tmp/fde-py312/bin/python "$d/we/run_eval.py" && cmp "$d/we/runs/baseline.json" docs/worked-engagement/runs/baseline.json && cmp "$d/we/runs/improved.json" docs/worked-engagement/runs/improved.json   # expect: exit 0
 ```
 From step 10 on, G also runs `bash scripts/smoke.sh` (expect exit 0).
 
@@ -245,8 +245,8 @@ branch before Bootstrap, and §10 verifies it is tracked.
 ```bash
 /tmp/fde-py312/bin/python -m pytest -q        # expect: exit 0, 0 failed
 /tmp/fde-py312/bin/ruff check .               # expect: exit 0
-grep -qx 'extend-exclude = \["mcp", ".rig", "blueprints"\]' pyproject.toml   # expect: exit 0
-grep -qx 'norecursedirs = \["blueprints", ".venv", ".git"\]' pyproject.toml  # expect: exit 0
+grep -Fqx 'extend-exclude = ["mcp", ".rig", "blueprints"]' pyproject.toml   # expect: exit 0
+grep -Fqx 'norecursedirs = ["blueprints", ".venv", ".git"]' pyproject.toml  # expect: exit 0
 /tmp/fde-py312/bin/fde-portfolio check   # expect: exit 0, installed console script works
 test "$(shasum -a 256 CLAUDE.md | cut -d' ' -f1)" = fec1dbdc1c688ade145faa63a548faa55fd8fdb9889eb9ed671a90d622179d3e   # expect: exit 0, CLAUDE.md equals the §19.1 block
 ```
@@ -481,6 +481,11 @@ image line is added; the owner inserts media under the H1 in a later commit). In
 §19.6, a blank line, the line `## Worked engagement (synthetic)`, a blank line, the engagement section
 literal in §19.6, and a blank line.
 Rename `## Quick start (5 lines)` to `## Quick start` and keep it after both new sections. Replace the
+line `| `pytest -q --cov` | 44 tests pass, package coverage 85% | `pytest -q --cov` |` with
+`| `pytest -q --cov` | the full suite passes | `pytest -q --cov` |` and the line
+`| `tests/` | 44 tests covering schema, render, CLI, drift scans, repo hygiene |` with
+`| `tests/` | tests covering schema, render, CLI, drift scans, repo hygiene, the eval and the docs |`;
+test (h) asserts both replacement lines are present and no line matches `\b\d+ tests\b`. Replace the
 first paragraph of `## The operating record` with the operating-record literal in §19.6, as one line. Keep the
 CI badge, the `git clone` line, a test command and the footer that `tests/test_repo_hygiene.py`
 requires. In `scripts/smoke.sh` add `docs/field-record.md docs/runbook.md docs/failure-taxonomy.md`
@@ -712,18 +717,21 @@ denied: rollback and venv recreation are operator actions approved per run.
       "Bash(git ls-files --error-unmatch:*)",
       "Bash(git check-ignore --no-index -q --:*)",
       "Bash(git merge-base --is-ancestor 15cba0fbc6bf08dfabd060b1ab1e97d0512d22ba HEAD)",
-      "Bash(grep -qx 'extend-exclude = \\[\"mcp\", \".rig\", \"blueprints\"\\]' pyproject.toml)",
-      "Bash(grep -qx 'norecursedirs = \\[\"blueprints\", \".venv\", \".git\"\\]' pyproject.toml)",
+      "Bash(grep -Fqx 'extend-exclude = [\"mcp\", \".rig\", \"blueprints\"]' pyproject.toml)",
+      "Bash(grep -Fqx 'norecursedirs = [\"blueprints\", \".venv\", \".git\"]' pyproject.toml)",
       "Bash(git diff --cached --name-only)",
       "Bash(git rev-parse HEAD)",
       "Bash(shasum -a 256 CLAUDE.md)",
       "Bash(cut -d' ' -f1)",
       "Bash(mktemp -d)",
-      "Bash(cp -R docs/worked-engagement:*)",
+      "Bash(mkdir:*)",
+      "Bash(cp docs/worked-engagement/run_eval.py docs/worked-engagement/scorer.py docs/worked-engagement/systems.py docs/worked-engagement/eval-set.jsonl:*)",
+      "Bash(test ! -e:*)",
       "Bash(/tmp/fde-py312/bin/python \"$d/we/run_eval.py\")",
       "Bash(cmp \"$d/we/runs/baseline.json\" docs/worked-engagement/runs/baseline.json)",
       "Bash(cmp \"$d/we/runs/improved.json\" docs/worked-engagement/runs/improved.json)",
       "Bash(test -x /tmp/fde-py312/bin/python)",
+      "Bash(test:*)",
       "Bash(test -z:*)",
       "Bash(test \"$(git diff --cached --name-only:*)",
       "Bash(test \"$rc\" -eq 1)",
@@ -980,6 +988,7 @@ in the engagement README are compared against the run files by step 6's test.
 | census pattern | `\b\d[\d,]*\s*(?:-\|\s)?(?:\w+\s+){0,2}repo(?:s\|sitory\|sitories)?\b` | step 10 test (d) | none | yes |
 | build python | `/tmp/fde-py312/bin/python` | §10b | every Verify, §19.1, §19.3, §20.1 | yes |
 | build ruff | `/tmp/fde-py312/bin/ruff` | §19.1 | every Verify, §19.3, §20.1 | yes |
+| console-script target | `fde_portfolio.cli:main` | `pyproject.toml` `[project.scripts]` | §1 current state, §19.6 resolution matrix | yes |
 | build CLI | `/tmp/fde-py312/bin/fde-portfolio` | §19.1 | §19.3, §20.1, §19.6 matrix | yes |
 | config file | `pyproject.toml` | §19.6 block | §3, step map, step 1, §11 | yes |
 | build venv | `/tmp/fde-py312` | §10 | §2, §19.1, §19.3, every Verify | yes |
@@ -1087,7 +1096,10 @@ git ls-files --error-unmatch README.md   # expect: exit 0
 rc=0; git check-ignore --no-index -q -- README.md || rc=$?; test "$rc" -eq 1   # expect: exit 0, no ignore rule matches
 git ls-files --error-unmatch scripts/smoke.sh   # expect: exit 0
 rc=0; git check-ignore --no-index -q -- scripts/smoke.sh || rc=$?; test "$rc" -eq 1   # expect: exit 0, no ignore rule matches
-/tmp/fde-py312/bin/python docs/worked-engagement/run_eval.py   # expect: exit 0
+d="$(mktemp -d)"; mkdir "$d/we"; cp docs/worked-engagement/run_eval.py docs/worked-engagement/scorer.py docs/worked-engagement/systems.py docs/worked-engagement/eval-set.jsonl "$d/we/"
+/tmp/fde-py312/bin/python "$d/we/run_eval.py"   # expect: exit 0, default invocation into a copy with no runs/
+cmp "$d/we/runs/baseline.json" docs/worked-engagement/runs/baseline.json   # expect: exit 0, file created and equal
+cmp "$d/we/runs/improved.json" docs/worked-engagement/runs/improved.json   # expect: exit 0, file created and equal
 git diff --exit-code HEAD -- docs/worked-engagement/runs   # expect: exit 0, rerun equals committed bytes
 for t in step-01-workspace step-02-eval-set step-03-score step-04-systems step-05-runs step-06-engagement-readme step-07-field-record step-08-ops-docs step-09-adrs step-10-readme; do git rev-parse -q --verify "refs/tags/$t^{commit}" >/dev/null || exit 1; done   # expect: exit 0, all ten tags resolve
 ```
