@@ -175,12 +175,12 @@ NOT APPLICABLE — no service, no users, no secrets.
 Checkpoint. Every Verify block exits 0 on a correct step under `set -e`. Each Checkpoint stages only
 that step's declared paths, asserts the staged list equals them, commits, and tags locally. Tags are
 never pushed. Rollback for step N is `git reset --hard <previous tag>` as named in the step map; for
-step 1 it is the base commit `15cba0fbc6bf08dfabd060b1ab1e97d0512d22ba`.
+step 1 it is the recorded pre-build tip, `git reset --hard "$(cat /tmp/fde-build-start)"`.
 
 ### Step map
 | # | Step | Depends on | Touches | Gate | Rollback target |
 |---|---|---|---|---|---|
-| 1 | workspace | — | `CLAUDE.md`, `pyproject.toml` | `/tmp/fde-py312/bin/python -m pytest -q` | `15cba0fbc6bf08dfabd060b1ab1e97d0512d22ba` |
+| 1 | workspace | — | `CLAUDE.md`, `pyproject.toml` | `/tmp/fde-py312/bin/python -m pytest -q` | the recorded start tip in `/tmp/fde-build-start` |
 | 2 | eval-set | 1 | `docs/worked-engagement/eval-set.jsonl`, `docs/worked-engagement/scorer.py`, `tests/test_scorer.py` | `/tmp/fde-py312/bin/python -m pytest -q tests/test_scorer.py` | `step-01-workspace` |
 | 3 | score | 2 | `docs/worked-engagement/scorer.py`, `tests/test_scorer.py` | `/tmp/fde-py312/bin/python -m pytest -q tests/test_scorer.py` | `step-02-eval-set` |
 | 4 | systems | 3 | `docs/worked-engagement/systems.py`, `tests/test_systems.py` | `/tmp/fde-py312/bin/python -m pytest -q tests/test_systems.py` | `step-03-score` |
@@ -189,7 +189,7 @@ step 1 it is the base commit `15cba0fbc6bf08dfabd060b1ab1e97d0512d22ba`.
 | 7 | field-record | 1 | `docs/field-record.md`, `tests/test_field_record.py` | `/tmp/fde-py312/bin/python -m pytest -q tests/test_field_record.py` | `step-06-engagement-readme` |
 | 8 | ops-docs | 6 | `docs/failure-taxonomy.md`, `docs/runbook.md`, `tests/test_docs.py` | `/tmp/fde-py312/bin/python -m pytest -q tests/test_docs.py` | `step-07-field-record` |
 | 9 | adrs | 8 | `docs/adr/0001-deterministic-offline-eval.md`, `docs/adr/0002-confidence-gate-abstain-to-human.md`, `docs/adr/0003-claim-labels-and-pseudonyms.md`, `tests/test_docs.py` | `/tmp/fde-py312/bin/python -m pytest -q tests/test_docs.py` | `step-08-ops-docs` |
-| 10 | readme | 9 | `README.md`, `scripts/smoke.sh`, `tests/test_docs.py` | `/tmp/fde-py312/bin/python -m pytest -q` | `step-09-adrs` |
+| 10 | readme | 7, 9 | `README.md`, `scripts/smoke.sh`, `tests/test_docs.py` | `/tmp/fde-py312/bin/python -m pytest -q` | `step-09-adrs` |
 
 ### Step 1 — workspace (`workspace`)
 **Do.** Write `CLAUDE.md` with the exact content in §19.1. In `pyproject.toml` change
@@ -218,9 +218,8 @@ git commit -m "step 1: workspace" && git tag step-01-workspace
 ```
 
 ### Step 2 — eval set and loader (`eval-set`)
-**Do.** Write `docs/worked-engagement/eval-set.jsonl`: 34 SYNTHETIC tickets for a fictional payments
-company, per §4, ids `T001`..`T034`, every one of the five routes present, at least 6 items worded
-ambiguously or with a negation ("Not a fraud issue, ..."). Write `docs/worked-engagement/scorer.py`
+**Do.** Write `docs/worked-engagement/eval-set.jsonl` byte for byte as the frozen fixture in §19.6
+(34 SYNTHETIC tickets, ids `T001`..`T034`, all five routes present). Write `docs/worked-engagement/scorer.py`
 with `ROUTES` and `load_eval` per §5. Write `tests/test_scorer.py` that inserts
 `docs/worked-engagement` at `sys.path[0]` and tests: the shipped set loads 34 items with all five
 labels; a duplicate id, a missing key and an unknown label each raise `ValueError` (via `tmp_path`).
@@ -266,10 +265,9 @@ git commit -m "step 3: score" && git tag step-03-score
 ```
 
 ### Step 4 — two systems (`systems`)
-**Do.** Write `docs/worked-engagement/systems.py`: `baseline` is a first-match keyword router that
-always answers with confidence 1.0 and falls back to `other`; `improved` sums keyword weights per
-route, ignores keywords inside a "not ..." negation clause, and returns route `None` when the top
-score is under 2 or leads the runner-up by less than 1. Write `tests/test_systems.py` with:
+**Do.** Write `docs/worked-engagement/systems.py` byte for byte as the frozen module in §19.6
+(baseline: ordered first-match substring rules, confidence 1.0, fallback `other`; improved: fixed
+substring weights, negation regex, abstain when the top score is under 2 or leads by less than 1). Write `tests/test_systems.py` with:
 `baseline` never returns `None` on the shipped set; `improved("Someone used my card in another
 country, I did not make this purchase")` returns `fraud`; `improved("Hello")` returns route `None`;
 `improved("Not a fraud issue, I just need a copy of last month's invoice")` returns `billing`.
@@ -294,15 +292,17 @@ git commit -m "step 4: systems" && git tag step-04-systems
 ### Step 5 — runner and saved runs (`runs`)
 **Do.** Write `docs/worked-engagement/run_eval.py` per §5 with an optional `--out DIR` (default: the
 `runs/` folder beside the script). Run `/tmp/fde-py312/bin/python docs/worked-engagement/run_eval.py` once to
-write the two run files. Extend `tests/test_systems.py` with three tests: (a) runs `[sys.executable, "docs/worked-engagement/run_eval.py", "--out", str(tmp_path)]` with
+write the two run files. Extend `tests/test_systems.py` with a fixture `fresh_runs(tmp_path)` that runs the CLI into that
+test's own `tmp_path` and returns `(stdout, tmp_path)`, and three tests: (a) runs `[sys.executable, "docs/worked-engagement/run_eval.py", "--out", str(tmp_path)]` with
 `subprocess.run(capture_output=True, text=True)`, asserts return code 0, and asserts
 `stdout.splitlines()` equals exactly `[line(b), line(i)]`, where `b` and `i` are the JSON objects read
 from `tmp_path/baseline.json` and `tmp_path/improved.json` and
 `line(d) = f"{d['system']} accuracy={d['accuracy']:.4f} answered_accuracy={d['answered_accuracy']:.4f} coverage={d['coverage']:.4f} wrong_auto_routes={d['wrong_auto_routes']}"`
-(the runner prints with this same format); (b) both files in `tmp_path` are byte-identical to the committed
-`runs/baseline.json` and `runs/improved.json`; (c) in the saved runs, improved `wrong_auto_routes` is
+(the runner prints with this same format); (b) using `fresh_runs`, both files in its `tmp_path` are byte-identical to the working-tree
+`docs/worked-engagement/runs/baseline.json` and `docs/worked-engagement/runs/improved.json` written
+earlier in this step (the committed-byte check is in §20.1); (c) in the saved runs, improved `wrong_auto_routes` is
 lower than baseline's, improved `answered_accuracy` is higher than baseline's, and improved
-`coverage` is at least 0.8.
+`coverage` is at least 0.8; and both saved runs equal the §19.6 expected published outcome.
 
 **Done when.**
 - WHEN the runner runs into a temporary folder THE SYSTEM SHALL exit 0 and print exactly the baseline line then the improved line, each equal to the line built from its JSON file.
@@ -369,8 +369,10 @@ of the bullets in (b); (d) every number token matching `\d[\d,]*(\.\d+)?` is in 
 `render(CARDS)` byte for byte, where `render` builds exactly: `# Field record`, blank, legend, blank,
 the table header, separator and four rows, then for each card a blank line, `### <Deployment>`, blank,
 `**Evidence.**`, blank, its claim bullets, blank, `**Not yet evidenced.**`, blank, its gap bullets,
-and a final newline; (g) a negative test appends the prose line `The rollout doubled retention.` to
-the rendered text and asserts it no longer equals the file. The builder writes the file by running
+and a final newline; (g) both (f) and (g) call one helper `validate(path) -> None` that raises
+`AssertionError` unless the file at `path` equals `render(CARDS)`; (f) calls it on
+`docs/field-record.md`; (g) copies that file to `tmp_path`, appends the line
+`The rollout doubled retention.`, and asserts `validate` raises on the copy. The builder writes the file by running
 nothing but this layout by hand; test (f) is the gate.
 
 **Done when.**
@@ -482,18 +484,23 @@ and playbooks keep their existing tests as the parity check.
 
 ## 10. Environment Setup
 Environment variables: none. Prerequisites: `git`, `uv` (checked with `uv --version`; 0.13.1
-observed), Python 3.12 available to `uv` (checked with `uv python find 3.12`). Bootstrap, safe to run
-twice (each line exits 0 on a second run):
+observed), Python 3.12 available to `uv` (checked with `uv python find 3.12`). Bootstrap has two
+blocks: 10a runs once before step 1; 10b is repeatable and exits 0 on every line on any rerun:
 ```bash
-git cat-file -e 15cba0fbc6bf08dfabd060b1ab1e97d0512d22ba^{commit}
-if git show-ref -q --verify refs/heads/aside/tier2-portfolio-20261123; then git switch aside/tier2-portfolio-20261123; else git switch -c aside/tier2-portfolio-20261123 15cba0fbc6bf08dfabd060b1ab1e97d0512d22ba; fi
+# 10a. One-time preflight (run once, before step 1)
+git show-ref -q --verify refs/heads/aside/tier2-portfolio-20261123   # expect: exit 0; the prepared branch exists
+git switch aside/tier2-portfolio-20261123
+git merge-base --is-ancestor 15cba0fbc6bf08dfabd060b1ab1e97d0512d22ba HEAD   # expect: exit 0
+git ls-files --error-unmatch blueprints/fde-field-record-blueprint.md   # expect: exit 0, the blueprint is committed
+for t in step-01-workspace step-02-eval-set step-03-score step-04-systems step-05-runs step-06-engagement-readme step-07-field-record step-08-ops-docs step-09-adrs step-10-readme; do if git rev-parse -q --verify "refs/tags/$t" >/dev/null; then echo "tag conflict: $t -> $(git rev-parse "refs/tags/$t")"; exit 1; fi; done   # expect: exit 0; a pre-existing step tag stops the build, nothing is deleted
+git rev-parse HEAD > /tmp/fde-build-start   # records the pre-build tip
+```
+```bash
+# 10b. Repeatable environment setup (safe to rerun at any time; every line exits 0)
 test -x /tmp/fde-py312/bin/python || uv venv -p 3.12 /tmp/fde-py312
-/tmp/fde-py312/bin/python -c 'import sys; assert sys.version_info[:2] == (3, 12), sys.version'   # expect: exit 0. On failure: `rm -rf /tmp/fde-py312` (build-owned, outside the repo) and rerun this block
-for t in step-01-workspace step-02-eval-set step-03-score step-04-systems step-05-runs step-06-engagement-readme step-07-field-record step-08-ops-docs step-09-adrs step-10-readme; do if git rev-parse -q --verify "refs/tags/$t" >/dev/null; then echo "tag conflict: $t -> $(git rev-parse "refs/tags/$t")"; exit 1; fi; done   # expect: exit 0. Any pre-existing step tag stops the build and is reported; nothing is deleted
-git ls-files --error-unmatch blueprints/fde-field-record-blueprint.md   # expect: exit 0, the blueprint is tracked
-test -s /tmp/fde-build-start || git rev-parse HEAD > /tmp/fde-build-start   # records the starting branch tip once
+/tmp/fde-py312/bin/python -c 'import sys; assert sys.version_info[:2] == (3, 12), sys.version'   # expect: exit 0. On failure: `rm -rf /tmp/fde-py312` (build-owned, outside the repo) and rerun 10b
 uv pip install --python /tmp/fde-py312/bin/python -e '.[dev]'
-/tmp/fde-py312/bin/python -m pytest -q       # expect: exit 0, 45 passed, 0 failed before step 1
+/tmp/fde-py312/bin/python -m pytest -q   # expect: exit 0, 0 failed (45 passed on the pre-build tip)
 ```
 The build venv lives outside the repository, so nothing it writes can be staged. The repo's existing `.venv/` (Python 3.14) is ignored by `.gitignore` on the base commit and is never read, used or modified. Files that must
 be committed: every path in the step map Touches column. None of them matches a `.gitignore` pattern
@@ -709,6 +716,107 @@ Every file a Verify or §20.1 command names is created by a step: `CLAUDE.md`, `
 run files (5); `tests/test_docs.py` (6); `tests/test_field_record.py` (7); `scripts/smoke.sh` edited (10,
 exists on base).
 
+Frozen fixture `docs/worked-engagement/eval-set.jsonl` (exact bytes):
+```jsonl
+{"id": "T001", "text": "I was charged twice for my monthly plan this morning", "label": "billing"}
+{"id": "T002", "text": "Why is my invoice higher than last month", "label": "billing"}
+{"id": "T003", "text": "Please update the card on file for my subscription", "label": "billing"}
+{"id": "T004", "text": "The billing statement shows a fee I do not recognise from your company", "label": "billing"}
+{"id": "T005", "text": "Can I switch to annual invoicing", "label": "billing"}
+{"id": "T006", "text": "My payment to the merchant failed but the charge still shows as pending", "label": "billing"}
+{"id": "T007", "text": "I want my money back for the order that never arrived", "label": "refund"}
+{"id": "T008", "text": "Please refund the duplicate payment", "label": "refund"}
+{"id": "T009", "text": "Return started last week, when does the refund post", "label": "refund"}
+{"id": "T010", "text": "The merchant agreed to a refund but I have not received it", "label": "refund"}
+{"id": "T011", "text": "Cancel the order and give me a refund", "label": "refund"}
+{"id": "T012", "text": "I did not refund anyone, why does my account show a refund issued", "label": "fraud"}
+{"id": "T013", "text": "Someone used my card in another country, I did not make this purchase", "label": "fraud"}
+{"id": "T014", "text": "There are three transactions I never authorised", "label": "fraud"}
+{"id": "T015", "text": "I got a text asking for my PIN that claimed to be from you", "label": "fraud"}
+{"id": "T016", "text": "My account was opened without my knowledge", "label": "fraud"}
+{"id": "T017", "text": "Unrecognised login and then a transfer I did not make", "label": "fraud"}
+{"id": "T018", "text": "I cannot log in, the reset link expired", "label": "access"}
+{"id": "T019", "text": "Locked out after too many password attempts", "label": "access"}
+{"id": "T020", "text": "Two factor code never arrives on my phone", "label": "access"}
+{"id": "T021", "text": "How do I add a teammate to our merchant dashboard", "label": "access"}
+{"id": "T022", "text": "My login works on mobile but not on the web", "label": "access"}
+{"id": "T023", "text": "Need to remove access for an employee who left", "label": "access"}
+{"id": "T024", "text": "What are your support hours", "label": "other"}
+{"id": "T025", "text": "Do you have an API for exporting reports", "label": "other"}
+{"id": "T026", "text": "Where is your office located", "label": "other"}
+{"id": "T027", "text": "I want to give feedback on the new app design", "label": "other"}
+{"id": "T028", "text": "Is there a partner program for agencies", "label": "other"}
+{"id": "T029", "text": "Not a fraud issue, I just need a copy of last month's invoice", "label": "billing"}
+{"id": "T030", "text": "This is not about access, I was charged a late fee by mistake", "label": "billing"}
+{"id": "T031", "text": "I can log in fine but the refund I was promised is missing", "label": "refund"}
+{"id": "T032", "text": "Not asking for a refund, someone stole my card details and bought things", "label": "fraud"}
+{"id": "T033", "text": "Hello", "label": "other"}
+{"id": "T034", "text": "Question about my account", "label": "other"}
+```
+
+Frozen module `docs/worked-engagement/systems.py` (exact bytes):
+```python
+"""Two SYNTHETIC routing systems for the worked engagement. No model calls."""
+
+from __future__ import annotations
+
+import re
+
+# Baseline: the first keyword that matches wins; it always answers.
+BASELINE_RULES = [
+    ("refund", "refund"),
+    ("fraud", "fraud"),
+    ("charged", "billing"),
+    ("invoice", "billing"),
+    ("login", "access"),
+    ("log in", "access"),
+    ("password", "access"),
+]
+
+# Improved: weighted evidence per route, negation-aware, abstains below a margin.
+WEIGHTS = {
+    "billing": {"charged": 2, "invoice": 2, "invoicing": 2, "billing": 2, "fee": 1, "card on file": 2,
+                "payment": 1, "subscription": 1, "plan": 1, "pending": 1},
+    "refund": {"refund": 2, "money back": 3, "return": 2, "cancel the order": 2},
+    "fraud": {"fraud": 2, "never authorised": 3, "did not make": 3, "stole": 3, "without my knowledge": 3,
+              "pin": 2, "unrecognised login": 3, "another country": 2},
+    "access": {"log in": 2, "login": 2, "password": 2, "locked out": 3, "reset link": 2,
+               "two factor": 3, "access": 1, "teammate": 2, "dashboard": 1},
+    "other": {"support hours": 3, "api": 2, "office": 2, "feedback": 2, "partner program": 3},
+}
+NEGATION = re.compile(r"\bnot (?:a |about |asking for a )?([a-z ]+?)(?: issue| request)?[,.]")
+THRESHOLD = 2
+
+
+def baseline(text: str) -> tuple[str | None, float]:
+    low = text.lower()
+    for word, route in BASELINE_RULES:
+        if word in low:
+            return route, 1.0
+    return "other", 1.0
+
+
+def improved(text: str) -> tuple[str | None, float]:
+    low = text.lower()
+    negated = {m.group(1).strip() for m in NEGATION.finditer(low)}
+    scores = {}
+    for route, words in WEIGHTS.items():
+        total = 0
+        for word, weight in words.items():
+            if word in low and not any(word in neg for neg in negated):
+                total += weight
+        scores[route] = total
+    ranked = sorted(scores.items(), key=lambda kv: (-kv[1], kv[0]))
+    (top, top_score), (_, second) = ranked[0], ranked[1]
+    if top_score < THRESHOLD or top_score - second < 1:
+        return None, round(top_score / (top_score + second + 1), 4)
+    return top, round(top_score / (top_score + second + 1), 4)
+```
+
+Expected published outcome (produced by the frozen fixture and module; step 5 test (c) gates it):
+baseline `accuracy=0.5294 answered_accuracy=0.5294 coverage=1.0000 wrong_auto_routes=16`;
+improved `accuracy=0.8529 answered_accuracy=1.0000 coverage=0.8529 wrong_auto_routes=0`.
+
 Byte-exact artifact reconciliation: the two run files are never hand-written; `run_eval.py` produces
 them with the §4 serialization and step 5 test (b) compares a fresh run against them. The results rows
 in the engagement README are compared against the run files by step 6's test.
@@ -732,9 +840,9 @@ in the engagement README are compared against the run files by step 6's test.
 | pytest exclusion line | `norecursedirs = ["blueprints", ".venv", ".git"]` | §19.6 block | step 1 Do, step 1 Verify, exclusion table | yes |
 | root README | `README.md` | §3 | step map, step 10, §19.1 | yes |
 | engagement README | `docs/worked-engagement/README.md` | §3 | step map, step 6, step 10 link | yes |
-| eval set | `docs/worked-engagement/eval-set.jsonl` | §3 | §4, step map, step 2, §19.1 | yes |
+| eval set | `docs/worked-engagement/eval-set.jsonl` (bytes: §19.6 fixture) | §3 | §4, step map, step 2, §19.1 | yes |
 | scorer module | `docs/worked-engagement/scorer.py` | §3 | §5, step map, steps 2-3, §19.1 | yes |
-| systems module | `docs/worked-engagement/systems.py` | §3 | §5, step map, step 4, §19.1 | yes |
+| systems module | `docs/worked-engagement/systems.py` (bytes: §19.6 module) | §3 | §5, step map, step 4, §19.1 | yes |
 | eval runner | `docs/worked-engagement/run_eval.py` | §5 | §3, step map, step 5, §19.1, §19.3, §20.1 | yes |
 | baseline run | `docs/worked-engagement/runs/baseline.json` | §3 | §4, step map, step 5, §20.1 | yes |
 | improved run | `docs/worked-engagement/runs/improved.json` | §3 | §4, step map, step 5, §20.1 | yes |
@@ -755,6 +863,10 @@ in the engagement README are compared against the run files by step 6's test.
 | README headings | `## Field record`, `## Worked engagement (synthetic)`, `## Quick start` | step 10 | §1 target | yes |
 | README links | `[docs/field-record.md](docs/field-record.md)`, `[docs/worked-engagement/README.md](docs/worked-engagement/README.md)` | step 10 | none | yes |
 | no-new-image rule | only the three base badge lines contain `![` | step 10 test (a) | §1 target, Non-Goals, §15 | yes |
+| build python | `/tmp/fde-py312/bin/python` | §10b | every Verify, §19.1, §19.3, §20.1 | yes |
+| build ruff | `/tmp/fde-py312/bin/ruff` | §19.1 | every Verify, §19.3, §20.1 | yes |
+| build CLI | `/tmp/fde-py312/bin/fde-portfolio` | §19.1 | §19.3, §20.1, §19.6 matrix | yes |
+| config file | `pyproject.toml` | §19.6 block | §3, step map, step 1, §11 | yes |
 | build venv | `/tmp/fde-py312` | §10 | §2, §19.1, §19.3, every Verify | yes |
 | build start record | `/tmp/fde-build-start` | §10 | §12 | yes |
 | branch | `aside/tier2-portfolio-20261123` | header | §10, §12, §19.3 | yes |
@@ -783,7 +895,7 @@ git ls-files --error-unmatch docs/worked-engagement/runs/baseline.json docs/work
 /tmp/fde-py312/bin/python docs/worked-engagement/run_eval.py && git diff --exit-code HEAD -- docs/worked-engagement/runs   # expect: exit 0, rerun equals committed bytes
 for t in step-01-workspace step-02-eval-set step-03-score step-04-systems step-05-runs step-06-engagement-readme step-07-field-record step-08-ops-docs step-09-adrs step-10-readme; do git rev-parse -q --verify "refs/tags/$t^{commit}" >/dev/null || exit 1; done   # expect: exit 0, all ten tags resolve
 ```
-Bootstrap re-run: running §10's block a second time exits 0 on every line.
+Bootstrap re-run: running §10b again after the build exits 0 on every line (§10a is one-time and is not rerun).
 
 Post-build launch checklist (not gates): the owner adds hero media under the H1 in a later commit;
 Mike approves the push of the branch.
