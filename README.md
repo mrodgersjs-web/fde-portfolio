@@ -6,6 +6,23 @@
 [![license MIT](https://img.shields.io/badge/license-MIT-0b3d2e)](LICENSE)
 [![python 3.10+](https://img.shields.io/badge/python-3.10%2B-2c5f5f)](pyproject.toml)
 
+## The operating record
+
+The playbooks below are the method; [CASE-STUDIES.md](CASE-STUDIES.md) is
+the field record: six dated operations on a private AI fleet
+(the 366-repo count is the 2026-10-30 audit census, an audit snapshot, not a
+current inventory)
+(storage integrity with hash-gated deletion, a 66-image container migration
+with preserved rollback, tri-GPU Blackwell serving restores behind idle
+gates, fleet-wide model-routing reconciliation, an MCP process-leak
+lifecycle fix). Every case names its evidence tier and carries a not-proven
+line, because a playbook without failure modes is marketing. The case set
+was gated by an independent 2026-10-30 inventory audit that issued six
+required corrections before publication.
+
+How the claims are verified: [AI-ENGINEERING-WORKFLOW.md](AI-ENGINEERING-WORKFLOW.md).
+Where each capability lives: [SKILLS-MATRIX.md](SKILLS-MATRIX.md).
+
 Five engagement-phase playbooks (`discovery`, `evaluation`, `architecture`,
 `go-live`, `handoff`) ship as structured YAML, validated against a JSON
 Schema, and rendered to Markdown by the `fde-portfolio` CLI. The
@@ -20,21 +37,6 @@ handoff doc names no owner, the eval set is shipped without a
 known-failure fixture. This repo is the boring layer: five short
 playbooks plus a CLI that turns them into a real worksheet, plus tests
 that refuse to ship a checklist with a customer name in it.
-
-## The operating record
-
-The playbooks above are the method; [CASE-STUDIES.md](CASE-STUDIES.md) is
-the field record: six dated operations on a 366-repo private AI fleet
-(storage integrity with hash-gated deletion, a 66-image container migration
-with preserved rollback, tri-GPU Blackwell serving restores behind idle
-gates, fleet-wide model-routing reconciliation, an MCP process-leak
-lifecycle fix). Every case names its evidence tier and carries a not-proven
-line, because a playbook without failure modes is marketing. The case set
-was gated by an independent 2026-10-30 inventory audit that issued six
-required corrections before publication.
-
-How the claims are verified: [AI-ENGINEERING-WORKFLOW.md](AI-ENGINEERING-WORKFLOW.md).
-Where each capability lives: [SKILLS-MATRIX.md](SKILLS-MATRIX.md).
 
 ## Quick start (5 lines)
 
@@ -170,3 +172,11 @@ Read [`SECURITY.md`](SECURITY.md). Email
 MIT: see [`LICENSE`](LICENSE).
 
 <sub>Built by Mike Rodgers · rodgersintelligence.com</sub>
+
+## Method documents
+
+- Failure taxonomy: [docs/failure-taxonomy.md](docs/failure-taxonomy.md)
+- Runbook: [docs/runbook.md](docs/runbook.md)
+- ADRs: [docs/adr/0001-evidence-tiers.md](docs/adr/0001-evidence-tiers.md),
+  [0002](docs/adr/0002-behavioral-requalification.md),
+  [0003](docs/adr/0003-minimal-mutation-gated-repair.md)
