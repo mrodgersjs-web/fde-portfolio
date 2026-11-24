@@ -116,6 +116,12 @@ fde-portfolio/
     └── test_docs.py                            # steps 6, 8, 9, 10
 ```
 
+### Existing inputs (read, not changed)
+`AGENTS.md`, `.github/copilot-instructions.md`, `CASE-STUDIES.md`, `tests/test_repo_hygiene.py`,
+`tests/test_cli.py`, `tests/test_playbooks.py`, `tests/test_render_headings.py`, and the four original
+smoke inputs `docs/implementation-playbook.md`, `docs/architecture.md`,
+`docs/evaluation-strategy.md`, `docs/public-boundary.md`.
+
 ### Delta
 Added: `CLAUDE.md`, every `docs/worked-engagement/` file, `docs/field-record.md`,
 `docs/failure-taxonomy.md`, `docs/runbook.md`, the three ADRs and the four test files. Modified:
@@ -141,10 +147,11 @@ Added: the eval item, prediction, score and run-file contracts above. Existing p
 data models are unchanged.
 
 ## 5. API Design
-- `scorer.load_eval(path) -> list[dict]`: raises `ValueError` on a missing key, a label outside the
+- `scorer.load_eval(path) -> list[dict]`: raises `ValueError` on an empty file, a missing key, a label outside the
   five routes, or a duplicate id.
-- `scorer.score(system, items, preds) -> dict`: raises `ValueError` when prediction ids are not
-  exactly the item ids.
+- `scorer.score(system, items, preds) -> dict`: raises `ValueError` when `items` is empty, when
+  prediction ids contain a duplicate, or when the prediction id sequence is not exactly the item id
+  sequence in the same order (no join by id; reordered predictions are rejected).
 - `systems.baseline(text) -> tuple[str | None, float]` (always answers) and
   `systems.improved(text) -> tuple[str | None, float]` (may return route `None`).
 - `python docs/worked-engagement/run_eval.py`: writes both run files, prints exactly two lines in the
@@ -172,7 +179,8 @@ NOT APPLICABLE — no service, no users, no secrets.
 ## 9. BUILD ORDER
 
 §10 Bootstrap runs once before step 1. Steps run in order; each runs Do, Done when, Verify, then
-Checkpoint. Every Verify block exits 0 on a correct step under `set -e`. Each Checkpoint stages only
+Checkpoint. Every Verify block exits 0 on a correct step under `set -e`. Before each Checkpoint the builder also runs `/tmp/fde-py312/bin/python -m pytest -q` (full suite,
+expect exit 0, 0 failed), which covers every prior step's pytest verify. Each Checkpoint stages only
 that step's declared paths, asserts the staged list equals them, commits, and tags locally. Tags are
 never pushed. Rollback for step N: `git reset --hard <previous tag>` as named in the step map, then
 delete every step tag numbered N or higher that this run created (`git tag -d step-NN-...` for each
@@ -250,12 +258,13 @@ git commit -m "step 2: eval-set" && git tag step-02-eval-set
 **Do.** Add `score` to `docs/worked-engagement/scorer.py` per §4 and §5. Extend `tests/test_scorer.py`
 with: all-correct predictions give accuracy 1.0 and coverage 1.0; one abstention lowers coverage and
 leaves `wrong_auto_routes` 0; one wrong route counts 1 wrong auto route; zero answered gives
-`answered_accuracy` 0.0; mismatched ids raise `ValueError`.
+`answered_accuracy` 0.0; mismatched ids, reordered ids, duplicate prediction ids and an empty
+`items` list each raise `ValueError`.
 
 **Done when.**
 - WHEN all predictions match THE SYSTEM SHALL return `accuracy` 1.0 and `coverage` 1.0.
 - WHEN one prediction abstains THE SYSTEM SHALL count it in `abstained` and not in `wrong_auto_routes`.
-- WHEN prediction ids differ from item ids THE SYSTEM SHALL raise `ValueError`.
+- WHEN prediction ids differ from, reorder or duplicate the item ids, or `items` is empty, THE SYSTEM SHALL raise `ValueError`.
 
 **Verify.**
 ```bash
@@ -336,11 +345,14 @@ row per system in baseline-then-improved order, each equal to `row(d)` below bui
 Create `tests/test_docs.py` with a test that reads both run files and asserts line 3 equals the
 SYNTHETIC banner and that, for `d` in (baseline, improved), the full line
 `row(d) = f"| {d['system']} | {d['accuracy']:.4f} | {d['answered_accuracy']:.4f} | {d['coverage']:.4f} | {d['wrong_auto_routes']} |"`
-appears in the README, baseline's line before improved's.
+is checked inside the `## Results` section only (lines after `## Results` up to the next `## `
+line): its table lines are exactly, in order, the header
+`| system | accuracy | answered_accuracy | coverage | wrong_auto_routes |`, the separator
+`|---|---|---|---|---|`, `row(baseline)` and `row(improved)`.
 
 **Done when.**
 - WHEN the README's line 3 is read THE SYSTEM SHALL equal the SYNTHETIC banner.
-- WHEN each run file is read THE SYSTEM SHALL find its exact results row as a full README line.
+- WHEN the `## Results` section is parsed THE SYSTEM SHALL find exactly the header, separator, baseline row and improved row, in that order.
 
 **Verify.**
 ```bash
@@ -402,8 +414,16 @@ git commit -m "step 7: field-record" && git tag step-07-field-record
 `| Class | Seen in | Detection signal | Mitigation |` and at least 6 rows, including the
 worked-engagement classes `confident wrong route`, `negation flip` and `empty or vague ticket`.
 Write `docs/runbook.md` with sections `## Rerun the eval`, `## Add an eval item`,
-`## Change a field-record fact`, `## Roll back`. Extend `tests/test_docs.py`: the taxonomy has the
-header and at least 6 data rows and names the three classes; the runbook has the four exact headings.
+`## Change a field-record fact`, `## Roll back`. Under each heading a fenced bash block holds the
+exact commands: Rerun: `/tmp/fde-py312/bin/python docs/worked-engagement/run_eval.py` then
+`git diff --exit-code -- docs/worked-engagement/runs`; Add an eval item: append one line to
+`docs/worked-engagement/eval-set.jsonl`, rerun the runner, update the expected outcome in the step 2
+and step 5 tests and the Results table, then `/tmp/fde-py312/bin/python -m pytest -q`; Change a
+field-record fact: edit `CARDS` and `ALLOWED_NUMBERS` in `tests/test_field_record.py` from the
+confirmed record only, regenerate the file, then `/tmp/fde-py312/bin/python -m pytest -q tests/test_field_record.py`;
+Roll back: `git reset --hard <previous step tag>` and `git tag -d <later step tags>`. Extend `tests/test_docs.py`: the taxonomy has the
+header and at least 6 data rows and names the three classes; the runbook has the four exact headings, and the section under each heading contains its named
+command literal (`run_eval.py`, `eval-set.jsonl`, `tests/test_field_record.py`, `git reset --hard`).
 
 **Done when.**
 - WHEN the taxonomy is parsed THE SYSTEM SHALL find the header, at least 6 data rows and the three named classes.
@@ -459,7 +479,9 @@ link literal, the text between `## Worked engagement (synthetic)` and the next `
 engagement link literal, and both link targets exist on disk; (d) the first paragraph under `## The operating record` equals the §19.6 operating-record literal
 exactly, and neither `366` nor `-repo` appears anywhere;
 (e) for each of the three new docs, a fixture copies `scripts/smoke.sh` to `tmp_path/scripts/smoke.sh` and
-copies each of the eight files in its `for f in` list to the same repository-relative path under
+copies each of the eight files in its `for f in` list (`README.md`,
+`docs/implementation-playbook.md`, `docs/architecture.md`, `docs/evaluation-strategy.md`,
+`docs/public-boundary.md`, `docs/field-record.md`, `docs/runbook.md`, `docs/failure-taxonomy.md`) to the same repository-relative path under
 `tmp_path` (for example `tmp_path/docs/runbook.md`); with all eight present
 `subprocess.run(["bash", str(tmp_path / "scripts" / "smoke.sh")])` exits 0 and prints
 `fde-portfolio smoke PASS`; then, per new doc, the test removes that one file, asserts exit 1, and
@@ -681,6 +703,8 @@ Bootstrap and §20.1 line has an entry, including the ten exact `git tag` comman
       "Bash(git diff --exit-code HEAD -- docs/worked-engagement/runs)",
       "Bash(grep -qx:*)",
       "Bash(echo:*)",
+      "Bash(set -euo pipefail)",
+      "Bash(exit 1)",
       "Bash(git switch:*)",
       "Bash(git show-ref:*)",
       "Bash(git cat-file:*)",
@@ -882,7 +906,7 @@ in the engagement README are compared against the run files by step 6's test.
 | field record test | `tests/test_field_record.py` | §3 | step map, step 7, §19.3 | yes |
 | smoke script | `scripts/smoke.sh` | §3 | step 10, §19.1, §19.3, §20.1 | yes |
 | run output line | `f"{d['system']} accuracy={d['accuracy']:.4f} answered_accuracy={d['answered_accuracy']:.4f} coverage={d['coverage']:.4f} wrong_auto_routes={d['wrong_auto_routes']}"` | §5 | step 5 | yes |
-| results row | `f"| {d['system']} | {d['accuracy']:.4f} | {d['answered_accuracy']:.4f} | {d['coverage']:.4f} | {d['wrong_auto_routes']} |"` | step 6 | none | yes |
+| results row | `f"\| {d['system']} \| {d['accuracy']:.4f} \| {d['answered_accuracy']:.4f} \| {d['coverage']:.4f} \| {d['wrong_auto_routes']} \|"` | step 6 Do | step 6 test (Results-section check) | yes |
 | SYNTHETIC banner | `> SYNTHETIC. Fictional company, fictional tickets. Every number below is produced by run_eval.py.` | step 6 | none | yes |
 | README headings | `## Field record`, `## Worked engagement (synthetic)`, `## Quick start` | step 10 | §1 target | yes |
 | README links | `[docs/field-record.md](docs/field-record.md)`, `[docs/worked-engagement/README.md](docs/worked-engagement/README.md)` | step 10 | none | yes |
@@ -918,15 +942,38 @@ in the engagement README are compared against the run files by step 6's test.
 ## 20. Acceptance Gate, Risks & Decision Log
 
 ### 20.1 Global acceptance gate
-Run as one script under `set -euo pipefail`; the first nonzero status fails the gate.
+Run as one script under `set -euo pipefail`; the first nonzero status fails the gate. It checks each
+of the 21 unique Touches paths individually.
 ```bash
 set -euo pipefail
 /tmp/fde-py312/bin/ruff check .                                            # expect: exit 0
 /tmp/fde-py312/bin/python -m pytest -q                                     # expect: exit 0, 0 failed
 /tmp/fde-py312/bin/fde-portfolio check                                     # expect: exit 0
 bash scripts/smoke.sh                                             # expect: exit 0
-git ls-files --error-unmatch docs/worked-engagement/runs/baseline.json docs/worked-engagement/runs/improved.json   # expect: exit 0, both tracked
-/tmp/fde-py312/bin/python docs/worked-engagement/run_eval.py && git diff --exit-code HEAD -- docs/worked-engagement/runs   # expect: exit 0, rerun equals committed bytes
+test -z "$(git status --porcelain)"   # expect: exit 0, clean checkout
+git ls-files --error-unmatch CLAUDE.md   # expect: exit 0
+git ls-files --error-unmatch pyproject.toml   # expect: exit 0
+git ls-files --error-unmatch docs/worked-engagement/eval-set.jsonl   # expect: exit 0
+git ls-files --error-unmatch docs/worked-engagement/scorer.py   # expect: exit 0
+git ls-files --error-unmatch tests/test_scorer.py   # expect: exit 0
+git ls-files --error-unmatch docs/worked-engagement/systems.py   # expect: exit 0
+git ls-files --error-unmatch tests/test_systems.py   # expect: exit 0
+git ls-files --error-unmatch docs/worked-engagement/run_eval.py   # expect: exit 0
+git ls-files --error-unmatch docs/worked-engagement/runs/baseline.json   # expect: exit 0
+git ls-files --error-unmatch docs/worked-engagement/runs/improved.json   # expect: exit 0
+git ls-files --error-unmatch docs/worked-engagement/README.md   # expect: exit 0
+git ls-files --error-unmatch tests/test_docs.py   # expect: exit 0
+git ls-files --error-unmatch docs/field-record.md   # expect: exit 0
+git ls-files --error-unmatch tests/test_field_record.py   # expect: exit 0
+git ls-files --error-unmatch docs/failure-taxonomy.md   # expect: exit 0
+git ls-files --error-unmatch docs/runbook.md   # expect: exit 0
+git ls-files --error-unmatch docs/adr/0001-deterministic-offline-eval.md   # expect: exit 0
+git ls-files --error-unmatch docs/adr/0002-confidence-gate-abstain-to-human.md   # expect: exit 0
+git ls-files --error-unmatch docs/adr/0003-claim-labels-and-pseudonyms.md   # expect: exit 0
+git ls-files --error-unmatch README.md   # expect: exit 0
+git ls-files --error-unmatch scripts/smoke.sh   # expect: exit 0
+/tmp/fde-py312/bin/python docs/worked-engagement/run_eval.py   # expect: exit 0
+git diff --exit-code HEAD -- docs/worked-engagement/runs   # expect: exit 0, rerun equals committed bytes
 for t in step-01-workspace step-02-eval-set step-03-score step-04-systems step-05-runs step-06-engagement-readme step-07-field-record step-08-ops-docs step-09-adrs step-10-readme; do git rev-parse -q --verify "refs/tags/$t^{commit}" >/dev/null || exit 1; done   # expect: exit 0, all ten tags resolve
 ```
 Bootstrap re-run: running §10b again after the build exits 0 on every line (§10a is one-time and is not rerun).
