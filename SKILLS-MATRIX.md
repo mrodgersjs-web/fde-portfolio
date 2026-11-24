@@ -17,3 +17,5 @@ Private rows are marked and dated; nothing points at vibes.
 | Workflow reliability | [rig-agent-firm](https://github.com/mrodgersjs-web/rig-agent-firm); case 3 (fleet scheduler) | heartbeat observability, scheduled receipts, atomic claiming |
 | Knowledge systems | private: rig-memory-os (SHA-pinned evidence record, 2026-10-29) | README-claimed authenticated retrieval + prediction scoring; public once client identifiers are stripped |
 | Engineering discipline | every CI badge on this profile | fmt/clippy/pytest/sanitizer gates, checked-in benchmarks, honest limits sections |
+| Cloud platforms | [resume](https://github.com/mrodgersjs-web/resume/blob/main/RESUME.md) cloud line | AWS and Azure are hands-on in the career record (Bedrock and Azure AI included). OCI is named on that resume line only. No public AWS, Azure, or OCI execution receipt. |
+| Workflow engines | [agentic-workflows](https://github.com/mrodgersjs-web/agentic-workflows) `results/n8n-run.json`, `results/langgraph-run.json` | n8n execution 21, status success. LangGraph reply HELLO-AGENT-LANGGRAPH-OK, 2026-10-28. LangChain is hands-on in the career record; the public langchain repos are forks. |
