@@ -184,17 +184,18 @@ Checkpoint. Every Verify block exits 0 on a correct step under `set -e`. Before 
 every non-step-specific check of steps 1-9 (lint, full pytest, installed CLI, both config literals). Each Checkpoint stages only
 that step's declared paths, asserts the staged list equals them, commits, and tags locally. Tags are
 never pushed. Step rollback is an operator action, never run from the unattended allowlist (§19.3).
-Rollback for step N, where `P` is the step map's Rollback target tag for step N:
+Rollback for step N, where `P` is the fully qualified ref of the step map's Rollback target tag for
+step N (for example `refs/tags/step-04-systems`):
 ```bash
 test "$(git branch --show-current)" = aside/tier2-portfolio-20261123            # expect: exit 0
-git rev-parse -q --verify "refs/tags/$P^{commit}"                                  # expect: exit 0, else stop
+git rev-parse -q --verify "$P^{commit}"                                  # expect: exit 0, else stop
 git reset --hard "$P"
 for f in <step N Touches paths>; do git cat-file -e "$P:$f" 2>/dev/null || rm -f -- "$f"; done
 for t in <step tags numbered N or higher from the §20.1 list>; do if git rev-parse -q --verify "refs/tags/$t" >/dev/null; then git tag -d "$t"; fi; done
 ```
 The two placeholder lists are filled from the step map and the ten §20.1 tag names before running;
-only those recorded tags and declared paths are ever touched. For step 1, `P` is
-`"$(cat /tmp/fde-build-start)"` and the tag list is all ten names.
+only those recorded tags and declared paths are ever touched. For step 1, `P` is the
+recorded SHA itself, `P="$(cat /tmp/fde-build-start)"`, which `git rev-parse` resolves directly, and the tag list is all ten names.
 
 
 ```bash
@@ -204,6 +205,11 @@ only those recorded tags and declared paths are ever touched. For step 1, `P` is
 /tmp/fde-py312/bin/fde-portfolio check              # expect: exit 0
 grep -qx 'extend-exclude = \["mcp", ".rig", "blueprints"\]' pyproject.toml   # expect: exit 0
 grep -qx 'norecursedirs = \["blueprints", ".venv", ".git"\]' pyproject.toml  # expect: exit 0
+test "$(shasum -a 256 CLAUDE.md | cut -d' ' -f1)" = fec1dbdc1c688ade145faa63a548faa55fd8fdb9889eb9ed671a90d622179d3e   # expect: exit 0, CLAUDE.md equals §19.1
+```
+From step 5 on, G also runs the default (no-argument) runner in an isolated copy:
+```bash
+d="$(mktemp -d)" && cp -R docs/worked-engagement "$d/we" && /tmp/fde-py312/bin/python "$d/we/run_eval.py" && cmp "$d/we/runs/baseline.json" docs/worked-engagement/runs/baseline.json && cmp "$d/we/runs/improved.json" docs/worked-engagement/runs/improved.json   # expect: exit 0
 ```
 From step 10 on, G also runs `bash scripts/smoke.sh` (expect exit 0).
 
@@ -232,6 +238,7 @@ branch before Bootstrap, and §10 verifies it is tracked.
 - WHEN `/tmp/fde-py312/bin/python -m pytest -q` runs THE SYSTEM SHALL exit 0 with 0 failed.
 - WHEN `/tmp/fde-py312/bin/ruff check .` runs THE SYSTEM SHALL exit 0.
 - WHEN `/tmp/fde-py312/bin/fde-portfolio check` runs THE SYSTEM SHALL exit 0.
+- WHEN `CLAUDE.md` is hashed THE SYSTEM SHALL equal the SHA-256 of the §19.1 block, `fec1dbdc1c688ade145faa63a548faa55fd8fdb9889eb9ed671a90d622179d3e`.
 - WHEN `pyproject.toml` is read THE SYSTEM SHALL contain the literal `"blueprints"` in both `extend-exclude` and `norecursedirs`.
 
 **Verify.**
@@ -241,6 +248,7 @@ branch before Bootstrap, and §10 verifies it is tracked.
 grep -qx 'extend-exclude = \["mcp", ".rig", "blueprints"\]' pyproject.toml   # expect: exit 0
 grep -qx 'norecursedirs = \["blueprints", ".venv", ".git"\]' pyproject.toml  # expect: exit 0
 /tmp/fde-py312/bin/fde-portfolio check   # expect: exit 0, installed console script works
+test "$(shasum -a 256 CLAUDE.md | cut -d' ' -f1)" = fec1dbdc1c688ade145faa63a548faa55fd8fdb9889eb9ed671a90d622179d3e   # expect: exit 0, CLAUDE.md equals the §19.1 block
 ```
 **Checkpoint.**
 ```bash
@@ -399,14 +407,14 @@ in claims]` and the bullets under `**Not yet evidenced.**` equal exactly `[f"- {
 (c) the file contains no `[inferred]` and no `[unverified]`, and every bullet line in the file is one
 of the bullets in (b); (d) every number token matching `\d[\d,]*(\.\d+)?` is in `ALLOWED_NUMBERS`;
 (e) every line starting `### ` is one of the four §14 deployment pseudonyms (the exact pseudonym
-allowlist); (f) the whole file equals
-`render(CARDS)` byte for byte, where `render` builds exactly: `# Field record`, blank, legend, blank,
+allowlist); (f) `path.read_bytes() == render(CARDS).encode("utf-8")`, where `render` builds exactly: `# Field record`, blank, legend, blank,
 the table header, separator and four rows, then for each card a blank line, `### <Deployment>`, blank,
 `**Evidence.**`, blank, its claim bullets, blank, `**Not yet evidenced.**`, blank, its gap bullets,
 and a final newline; (g) both (f) and (g) call one helper `validate(path) -> None` that raises
 `AssertionError` unless the file at `path` equals `render(CARDS)`; (f) calls it on
 `docs/field-record.md`; (g) copies that file to `tmp_path`, appends the line
-`The rollout doubled retention.`, and asserts `validate` raises on the copy. The builder writes the file by running
+`The rollout doubled retention.`, and asserts `validate` raises on the copy; a second copy with every
+LF replaced by CRLF also makes `validate` raise. `validate` compares bytes as in (f). The builder writes the file by running
 nothing but this layout by hand; test (f) is the gate.
 
 **Done when.**
@@ -707,8 +715,14 @@ denied: rollback and venv recreation are operator actions approved per run.
       "Bash(grep -qx 'extend-exclude = \\[\"mcp\", \".rig\", \"blueprints\"\\]' pyproject.toml)",
       "Bash(grep -qx 'norecursedirs = \\[\"blueprints\", \".venv\", \".git\"\\]' pyproject.toml)",
       "Bash(git diff --cached --name-only)",
-      "Bash(git diff --exit-code -- docs/worked-engagement/runs)",
       "Bash(git rev-parse HEAD)",
+      "Bash(shasum -a 256 CLAUDE.md)",
+      "Bash(cut -d' ' -f1)",
+      "Bash(mktemp -d)",
+      "Bash(cp -R docs/worked-engagement:*)",
+      "Bash(/tmp/fde-py312/bin/python \"$d/we/run_eval.py\")",
+      "Bash(cmp \"$d/we/runs/baseline.json\" docs/worked-engagement/runs/baseline.json)",
+      "Bash(cmp \"$d/we/runs/improved.json\" docs/worked-engagement/runs/improved.json)",
       "Bash(test -x /tmp/fde-py312/bin/python)",
       "Bash(test -z:*)",
       "Bash(test \"$(git diff --cached --name-only:*)",
@@ -779,10 +793,10 @@ Requires Python 3.10 or newer, standard library only.
 
 ```bash
 python3 docs/worked-engagement/run_eval.py
-git diff --exit-code -- docs/worked-engagement/runs
+git diff --exit-code HEAD -- docs/worked-engagement/runs
 ```
 
-The second command exits 0 when the rerun reproduces the committed results byte for byte.
+The second command exits 0 when the rerun reproduces the results committed at `HEAD` byte for byte.
 
 ## Change the eval set or a field-record fact
 
@@ -903,7 +917,7 @@ improved `accuracy=0.8529 answered_accuracy=1.0000 coverage=0.8529 wrong_auto_ro
 | `eval-set.jsonl` bytes | §19.6 frozen fixture | step 2 test, SHA-256 equals `dae205e9367083d71fb820a1a68ecb9755c4c2f0b03d7763ed50598714cc62d5` | yes, digest computed from the fixture source |
 | `systems.py` bytes | §19.6 frozen module | step 4 test, SHA-256 equals `da5cc479476a48ace90d5619297530687145e574c16b762ccc760b983ef2f3a7` | yes, digest computed from the module source |
 | SYNTHETIC banner | step 6 literal | step 6 test, line 3 string equality | yes |
-| `docs/field-record.md` bytes | `render(CARDS)` from §14 literals | step 7 test (f), string equality | yes |
+| `docs/field-record.md` bytes | `render(CARDS)` from §14 literals | step 7 test (f), byte equality incl. CRLF mutation | yes |
 | operating-record paragraph | §19.6 literal | step 10 test (d), string equality | yes |
 | README section bodies | §19.6 section literals | step 10 test (c), string equality | yes |
 | `docs/runbook.md` bytes | §19.6 runbook literal | step 8 test, byte equality | yes |
@@ -984,7 +998,27 @@ in the engagement README are compared against the run files by step 6's test.
 | field-record legend | `Every claim below is [confirmed] against the maintainer's private career record. Employers and clients appear as sector pseudonyms. Gaps are listed, not filled.` | §14 | step 7 `CARDS`/`render` | yes |
 | field-record table header | `\| Deployment \| Years \| Sector \|` | step 7 | §14 table | yes |
 | field-record card labels | `**Evidence.**`, `**Not yet evidenced.**` | step 7 | none | yes |
-| field-record claims and gaps | the 15 claim strings and 4 gap strings in §14, exact | §14 | step 7 `CARDS` | yes |
+| claim 1 (Independent AI practice) | `8 client engagements since 2025` | §14 claims table | step 7 `CARDS`, rendered `docs/field-record.md` | yes |
+| claim 2 (Independent AI practice) | `6 client AI applications live under a written reference architecture, each with a roadmap, service level and health metrics` | §14 claims table | step 7 `CARDS`, rendered `docs/field-record.md` | yes |
+| claim 3 (Independent AI practice) | `Up to 80% adoption of client AI applications through walkthroughs, training and super-user networks` | §14 claims table | step 7 `CARDS`, rendered `docs/field-record.md` | yes |
+| claim 4 (Independent AI practice) | `8 activate, buy or build feasibility reviews with client IT before spend` | §14 claims table | step 7 `CARDS`, rendered `docs/field-record.md` | yes |
+| claim 5 (Independent AI practice) | `6 third-party AI vendors vetted for model risk` | §14 claims table | step 7 `CARDS`, rendered `docs/field-record.md` | yes |
+| claim 6 (Independent AI practice) | `A measured cut of about 20% in run cost, incidents, manual handling or review cycle time` | §14 claims table | step 7 `CARDS`, rendered `docs/field-record.md` | yes |
+| claim 7 (Independent AI practice) | `Confidence-gated AI actions with a tamper-evident audit trail, guardrails and eval harnesses` | §14 claims table | step 7 `CARDS`, rendered `docs/field-record.md` | yes |
+| claim 8 (Independent AI practice) | `About 30% of practice time on self-learning systems that improve from usage feedback` | §14 claims table | step 7 `CARDS`, rendered `docs/field-record.md` | yes |
+| claim 9 (Health IT vendor, AI portfolio) | `AI and analytics intake of 12 use cases, top 4 funded` | §14 claims table | step 7 `CARDS`, rendered `docs/field-record.md` | yes |
+| claim 10 (Health IT vendor, AI portfolio) | `8 AI business cases built with Finance` | §14 claims table | step 7 `CARDS`, rendered `docs/field-record.md` | yes |
+| claim 11 (Health IT vendor, AI portfolio) | `3 AI and analytics vendor evaluations with Procurement, Risk and Legal` | §14 claims table | step 7 `CARDS`, rendered `docs/field-record.md` | yes |
+| claim 12 (Health IT vendor, AI portfolio) | `An AI capability taken through formal security, privacy, HIPAA and compliance review` | §14 claims table | step 7 `CARDS`, rendered `docs/field-record.md` | yes |
+| claim 13 (Regional health system, digital and AI innovation) | `AI and ML work since 2019, including radiology read prioritization about 15% faster` | §14 claims table | step 7 `CARDS`, rendered `docs/field-record.md` | yes |
+| claim 14 (Regional health system, digital and AI innovation) | `6 digital-health projects run through an innovation center of excellence` | §14 claims table | step 7 `CARDS`, rendered `docs/field-record.md` | yes |
+| claim 15 (Telehealth startup, product roadmap) | `6 end-user focus groups and roadmap sessions with health-system partners` | §14 claims table | step 7 `CARDS`, rendered `docs/field-record.md` | yes |
+| gap 1 (Independent AI practice) | `Client-attributable before and after metrics per engagement` | §14 gaps table | step 7 `CARDS`, rendered `docs/field-record.md` | yes |
+| gap 2 (Health IT vendor, AI portfolio) | `Market-signal volume for the competitive intelligence capability` | §14 gaps table | step 7 `CARDS`, rendered `docs/field-record.md` | yes |
+| gap 3 (Regional health system, digital and AI innovation) | `Teletriage scale and emergency wait-time figures` | §14 gaps table | step 7 `CARDS`, rendered `docs/field-record.md` | yes |
+| gap 4 (Telehealth startup, product roadmap) | `Deployment and outcome facts for the platform` | §14 gaps table | step 7 `CARDS`, rendered `docs/field-record.md` | yes |
+| runs folder | `docs/worked-engagement/runs` | §3 | §20.1 diff, §19.6 runbook literal, gate G | yes |
+| package folder | `src/fde_portfolio/` | §1 Current state | §1 Non-Goals, §19.1 `CLAUDE.md` | yes |
 | `ALLOWED_NUMBERS` | `{"2013", "2019", "2020", "2021", "2025", "2026", "3", "4", "6", "8", "12", "15", "20", "30", "80"}` | §14 | step 7 test (d) | yes |
 | operating-record body | `The playbooks above are the method; [CASE-STUDIES.md](CASE-STUDIES.md) holds six dated operations on a private AI fleet (storage integrity with hash-gated deletion, a container migration with preserved rollback, GPU serving restores behind idle gates, model-routing reconciliation, an MCP process-leak lifecycle fix). Every case names its evidence tier and carries a not-proven line. The case set was gated by an independent 2026-10-30 inventory audit that issued six required corrections before publication.` | §19.6 | step 10 Do, step 10 test (d) | yes |
 | step tag 1 | `step-01-workspace` | §20.1 | step 1 Checkpoint, §10, §12, §19.3 | yes |
