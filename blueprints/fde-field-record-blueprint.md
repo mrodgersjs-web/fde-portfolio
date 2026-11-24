@@ -158,7 +158,7 @@ data models are unchanged.
   `systems.improved(text) -> tuple[str | None, float]` (may return route `None`).
 - `python docs/worked-engagement/run_eval.py`: writes both run files, prints exactly two lines in the
   form `<system> accuracy=<f> answered_accuracy=<f> coverage=<f> wrong_auto_routes=<int>` (floats
-  formatted `:.4f`), `baseline` first, and exits 0. `--out DIR` redirects both run files.
+  formatted `:.4f`), `baseline` first, and exits 0. `--out DIR` redirects both run files. The input is always `eval-set.jsonl` in the runner's own folder.
 
 ### Delta
 Added: the `scorer`, `systems` and `run_eval.py` interfaces above. Modified: none of the existing
@@ -214,7 +214,8 @@ From step 5 on, G also runs the default (no-argument) runner in an isolated copy
 ```bash
 d="$(mktemp -d)" && mkdir "$d/we" && cp docs/worked-engagement/run_eval.py docs/worked-engagement/scorer.py docs/worked-engagement/systems.py docs/worked-engagement/eval-set.jsonl "$d/we/" && test ! -e "$d/we/runs" && /tmp/fde-py312/bin/python "$d/we/run_eval.py" && cmp "$d/we/runs/baseline.json" docs/worked-engagement/runs/baseline.json && cmp "$d/we/runs/improved.json" docs/worked-engagement/runs/improved.json   # expect: exit 0
 ```
-From step 10 on, G also runs `bash scripts/smoke.sh` (expect exit 0).
+G also runs `bash scripts/smoke.sh` (expect exit 0) from step 1 on. From step 6 on it runs the step 6
+reader check, and from step 8 on the step 8 runbook check (both quoted in those Verify blocks).
 
 ### Step map
 | # | Step | Depends on | Touches | Gate | Rollback target |
@@ -253,6 +254,7 @@ branch before Bootstrap, and §10 verifies it is tracked.
 grep -Fqx 'extend-exclude = ["mcp", ".rig", "blueprints"]' pyproject.toml   # expect: exit 0
 grep -Fqx 'norecursedirs = ["blueprints", ".venv", ".git"]' pyproject.toml  # expect: exit 0
 /tmp/fde-py312/bin/fde-portfolio check   # expect: exit 0, installed console script works
+bash scripts/smoke.sh   # expect: exit 0, prints fde-portfolio smoke PASS
 test "$(shasum -a 256 CLAUDE.md | cut -d' ' -f1)" = 83a6bd88c7b1759801a38c726daa94bf48633960567204fd8e08a5b5c8d9d887   # expect: exit 0, CLAUDE.md equals the §19.1 block
 { git show 15cba0fbc6bf08dfabd060b1ab1e97d0512d22ba:AGENTS.md; printf '%s\n' 'Build, lint, test and eval commands: see CLAUDE.md (canonical).'; } | cmp - AGENTS.md   # expect: exit 0, base AGENTS.md plus the one bridge line
 ```
@@ -267,12 +269,12 @@ git add AGENTS.md CLAUDE.md pyproject.toml && test "$(git diff --cached --name-o
 with `ROUTES` and `load_eval` per §5. Write `tests/test_scorer.py` that inserts
 `docs/worked-engagement` at `sys.path[0]` and tests: the shipped file's SHA-256 equals
 `dae205e9367083d71fb820a1a68ecb9755c4c2f0b03d7763ed50598714cc62d5` (the §19.6 fixture); the shipped set
-loads 34 items with all five labels; a duplicate id, a missing key and an unknown label each raise `ValueError` (via `tmp_path`).
+loads 34 items with all five labels; an empty file, a duplicate id, a missing key and an unknown label each raise `ValueError` (via `tmp_path`).
 
 **Done when.**
 - WHEN `load_eval` reads the shipped set THE SYSTEM SHALL return 34 items carrying 5 distinct labels.
 - WHEN a file holds a duplicate id THE SYSTEM SHALL raise `ValueError`.
-- WHEN a line has an unknown label THE SYSTEM SHALL raise `ValueError`.
+- WHEN a line has an unknown label, or the file is empty, THE SYSTEM SHALL raise `ValueError`.
 
 **Verify.**
 ```bash
@@ -349,9 +351,10 @@ lower than baseline's, improved `answered_accuracy` is higher than baseline's, a
 `coverage` is at least 0.8; and both saved runs equal the §19.6 expected published outcome; (e) for each saved run, `system` is
 `baseline` or `improved` respectively, every saved prediction's `(route, confidence)` equals
 `systems.<system>(text)` for the eval item with that id, and `scorer.score(system, items, preds)`
-recomputed from the fixture and the saved predictions equals the saved score fields; (f) a fixture copy
-in `tmp_path` with item `T001` relabelled from `billing` to `other`, run through the runner with
-`--out`, changes baseline `correct` versus the saved run.
+recomputed from the fixture and the saved predictions equals the saved score fields; (f) copies `run_eval.py`,
+`scorer.py` and `systems.py` into `tmp_path/we/` beside a copy of the fixture with item `T001`
+relabelled from `billing` to `other`, runs `tmp_path/we/run_eval.py --out tmp_path/out`, and asserts
+exit 0 and baseline `correct == 17`.
 
 **Done when.**
 - WHEN the runner runs into a temporary folder THE SYSTEM SHALL exit 0 and print exactly the baseline line then the improved line, each equal to the line built from its JSON file.
@@ -395,7 +398,7 @@ line): its table lines are exactly, in order, the header
 ```bash
 /tmp/fde-py312/bin/python -m pytest -q tests/test_docs.py   # expect: exit 0, 0 failed
 /tmp/fde-py312/bin/ruff check .                             # expect: exit 0
-PATH=/tmp/fde-py312/bin:$PATH python3 --version            # expect: Python 3.12.x (reader minimum is 3.10)
+PATH=/tmp/fde-py312/bin:$PATH python3 -c 'import sys; assert sys.version_info[:2] == (3, 12), sys.version'   # expect: exit 0, venv python3 selected
 PATH=/tmp/fde-py312/bin:$PATH python3 docs/worked-engagement/run_eval.py && git diff --exit-code -- docs/worked-engagement/runs   # expect: exit 0, the published reader command reproduces the saved runs
 ```
 **Checkpoint.**
@@ -499,7 +502,8 @@ line `| `pytest -q --cov` | 44 tests pass, package coverage 85% | `pytest -q --c
 `| `pytest -q --cov` | the full suite passes | `pytest -q --cov` |` and the line
 `| `tests/` | 44 tests covering schema, render, CLI, drift scans, repo hygiene |` with
 `| `tests/` | tests covering schema, render, CLI, drift scans, repo hygiene, the eval and the docs |`;
-test (h) asserts both replacement lines are present and no line matches `\b\d+ tests\b`. Replace the
+test (h) asserts both replacement lines are present and no line matches `\b\d+ tests\b`. Insert before `## License`
+the line `## Public Boundary`, a blank line, the one-line literal `The public boundary for this repository is in [docs/public-boundary.md](docs/public-boundary.md). Customers and employers appear only as sector pseudonyms, and every claim is a confirmed fact.`, and a blank line. Replace the
 first paragraph of `## The operating record` with the operating-record literal in §19.6, as one line. Keep the
 CI badge, the `git clone` line, a test command and the footer that `tests/test_repo_hygiene.py`
 requires. In `scripts/smoke.sh` add `docs/field-record.md docs/runbook.md docs/failure-taxonomy.md`
@@ -512,6 +516,7 @@ exactly; and a helper `census(text)` returns the matches of
 `re.compile(r"\b\d[\d,]*\s*(?:-|\s)?(?:\w+\s+){0,2}repo(?:s|sitory|sitories)?\b", re.I)` and is
 empty for the README, while a negative test asserts it is non-empty for each of
 `The fleet contains 367 repositories.`, `a 12-repo fleet` and `366 private repos`;
+(i) the body under `## Public Boundary` equals that literal and `docs/public-boundary.md` exists;
 (e) for each of the three new docs, a fixture copies `scripts/smoke.sh` to `tmp_path/scripts/smoke.sh` and
 copies each of the eight files in its `for f in` list (`README.md`,
 `docs/implementation-playbook.md`, `docs/architecture.md`, `docs/evaluation-strategy.md`,
@@ -525,6 +530,7 @@ restores it.
 - WHEN README is scanned THE SYSTEM SHALL find only the three base badge images, the three headings in order, and `census` SHALL return no match.
 - WHEN `census` scans each of the three negative census sentences THE SYSTEM SHALL return a match.
 - WHEN each new section is read THE SYSTEM SHALL equal its §19.6 section literal and its link target SHALL exist.
+- WHEN the `## Public Boundary` section is read THE SYSTEM SHALL equal its literal and its link target SHALL exist.
 - WHEN smoke runs with one new doc missing THE SYSTEM SHALL exit 1.
 - WHEN the full suite runs THE SYSTEM SHALL exit 0 with 0 failed.
 
@@ -544,7 +550,9 @@ NOT APPLICABLE — additive change; nothing is migrated, replaced or cut over. T
 and playbooks keep their existing tests as the parity check.
 
 ## 10. Environment Setup
-Environment variables: none to configure. `LC_ALL=C` is set command-locally on every Checkpoint's
+Environment variables: none to configure. Inherited `PATH`: steps 6 and 8 and gate G prefix it as
+`PATH=/tmp/fde-py312/bin:$PATH`, so `python3` must resolve to `/tmp/fde-py312/bin/python3`
+(the venv's 3.12 interpreter); the step 6 Verify asserts this. `LC_ALL=C` is set command-locally on every Checkpoint's
 `sort` so the staged-path order is byte-deterministic; it needs no user configuration. Prerequisites: `git`, `uv` (checked with `uv --version`; 0.13.1
 observed), Python 3.12 available to `uv` (checked with `uv python find 3.12`). Bootstrap has two
 blocks: 10a runs once before step 1; 10b is repeatable and exits 0 on every line on any rerun:
@@ -669,7 +677,7 @@ Destination `CLAUDE.md`, written verbatim in step 1:
 # CLAUDE.md — fde-portfolio
 
 ## Commands (run from the repo root)
-- Setup (same as §10b): `test -x /tmp/fde-py312/bin/python || uv venv -p 3.12 /tmp/fde-py312`, then
+- Environment install (the first three lines of §10b; §10b's fourth line is the test run below): `test -x /tmp/fde-py312/bin/python || uv venv -p 3.12 /tmp/fde-py312`, then
   `/tmp/fde-py312/bin/python -c 'import sys; assert sys.version_info[:2] == (3, 12), sys.version'`, then
   `uv pip install --python /tmp/fde-py312/bin/python -e '.[dev]'`
 - Lint: `/tmp/fde-py312/bin/ruff check .`
@@ -761,7 +769,7 @@ denied: rollback and venv recreation are operator actions approved per run.
       "Bash(git diff --exit-code HEAD -- docs/worked-engagement/runs)",
       "Bash(git diff --exit-code HEAD -- pyproject.toml)",
       "Bash(python3 docs/worked-engagement/run_eval.py)",
-      "Bash(PATH=/tmp/fde-py312/bin:$PATH python3 --version)",
+      "Bash(PATH=/tmp/fde-py312/bin:$PATH python3 -c 'import sys; assert sys.version_info[:2] == (3, 12), sys.version')",
       "Bash(PATH=/tmp/fde-py312/bin:$PATH python3 docs/worked-engagement/run_eval.py)",
       "Bash(git diff --exit-code -- docs/worked-engagement/runs)",
       "Bash(echo:*)",
@@ -958,6 +966,7 @@ improved `accuracy=0.8529 answered_accuracy=1.0000 coverage=0.8529 wrong_auto_ro
 | operating-record paragraph | §19.6 literal | step 10 test (d), string equality | yes |
 | README section bodies | §19.6 section literals | step 10 test (c), string equality | yes |
 | `docs/runbook.md` bytes | §19.6 runbook literal | step 8 test, byte equality | yes |
+| expected published outcome | §4 formulas, `round(x, 4)`; §5 `:.4f` print format. Property (producing code does not exist before the build): baseline `n=34, correct=18, answered=34, wrong_auto_routes=16`, `round(18/34,4)=0.5294`; improved `n=34, correct=29, answered=29, wrong_auto_routes=0`, `round(29/34,4)=0.8529`, `round(29/29,4)=1.0` | step 5 test (c) against `/tmp/fde-py312/bin/python docs/worked-engagement/run_eval.py` stdout | property checked 2026-11-23 with `/tmp/fde-py312/bin/python3 -c` in /tmp; byte lines confirmed only after the build |
 | saved run bytes | §4 UTF-8 canonical JSON | step 5 test (d), bytes equality | yes |
 
 Runtime confirmation of these rows is recorded only after the builder runs those tests.
@@ -1037,7 +1046,11 @@ in the engagement README are compared against the run files by step 6's test.
 | isolated runner | `"$d/we/run_eval.py"` | gate G (step 5 on) | §20.1, §19.3 | yes |
 | isolated baseline run | `"$d/we/runs/baseline.json"` | gate G (step 5 on) | §20.1 | yes |
 | isolated improved run | `"$d/we/runs/improved.json"` | gate G (step 5 on) | §20.1 | yes |
-| repeatable setup sequence | `test -x /tmp/fde-py312/bin/python \|\| uv venv -p 3.12 /tmp/fde-py312`; version assert; `uv pip install --python /tmp/fde-py312/bin/python -e '.[dev]'` | §10b | §19.1 Setup, §20.1 bootstrap rerun, §19.3 | yes |
+| environment install | `test -x /tmp/fde-py312/bin/python \|\| uv venv -p 3.12 /tmp/fde-py312`; `/tmp/fde-py312/bin/python -c 'import sys; assert sys.version_info[:2] == (3, 12), sys.version'`; `uv pip install --python /tmp/fde-py312/bin/python -e '.[dev]'` | §10b lines 1-3 | §19.1, §20.1 (both copies), §19.3 | yes |
+| §10b test line | `/tmp/fde-py312/bin/python -m pytest -q` | §10b line 4 | §20.1 bootstrap rerun | yes |
+| distribution name | `fde-portfolio` (`[project] name`) | `pyproject.toml` (base) | §1, §5 | yes |
+| console script | `fde-portfolio = "fde_portfolio.cli:main"` | `pyproject.toml` `[project.scripts]` (base) | §19.6 matrix, `/tmp/fde-py312/bin/fde-portfolio` | yes |
+| public boundary literal | `The public boundary for this repository is in [docs/public-boundary.md](docs/public-boundary.md). Customers and employers appear only as sector pseudonyms, and every claim is a confirmed fact.` | step 10 Do | step 10 test (i) | yes |
 | bridge file | `AGENTS.md` | §19.2 | §19 intro, §19.1 rules | yes |
 | field-record legend | `Every claim below is [confirmed] against the maintainer's private career record. Employers and clients appear as sector pseudonyms. Gaps are listed, not filled.` | §14 | step 7 `CARDS`/`render` | yes |
 | field-record table header | `\| Engagement \| Years \| Sector \|` | step 7 | §14 table | yes |
@@ -1084,6 +1097,10 @@ of the 22 unique Touches paths individually for tracking and, with `git check-ig
 requires exit status exactly 1 (no `.gitignore` rule matches).
 ```bash
 set -euo pipefail
+# environment install for this checkout (§10b lines 1-3), before any tool runs
+test -x /tmp/fde-py312/bin/python || uv venv -p 3.12 /tmp/fde-py312
+/tmp/fde-py312/bin/python -c 'import sys; assert sys.version_info[:2] == (3, 12), sys.version'
+uv pip install --python /tmp/fde-py312/bin/python -e '.[dev]'
 /tmp/fde-py312/bin/ruff check .                                            # expect: exit 0
 /tmp/fde-py312/bin/python -m pytest -q                                     # expect: exit 0, 0 failed
 /tmp/fde-py312/bin/fde-portfolio check                                     # expect: exit 0
@@ -1151,7 +1168,7 @@ git diff --exit-code HEAD -- pyproject.toml   # expect: exit 0, manifest unchang
 
 Post-build launch checklist (not gates, per `docs/public-boundary.md`): `flag-gate.sh` PASS (the
 maintainer's approved copy, outside this repository); a human review of history and large blobs; the
-README keeps a Public Boundary section; no deploy keys or webhooks copied; the owner adds hero media
+README keeps its `## Public Boundary` section (step 10); no deploy keys or webhooks copied; the owner adds hero media
 under the H1 in a later commit;
 Mike approves the push of the branch.
 
