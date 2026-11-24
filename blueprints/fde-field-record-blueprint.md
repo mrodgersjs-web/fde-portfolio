@@ -140,7 +140,8 @@ Score object (from `scorer.score`): keys `system` (str), `n`, `answered`, `absta
 `accuracy = correct / n`; `answered_accuracy = correct / answered`, 0.0 when `answered` is 0;
 `coverage = answered / n`; a wrong auto route is an answered prediction whose route differs from the
 label. Run file `runs/<system>.json` = the score object plus key `predictions` (list of prediction
-objects in eval-set order), serialized with `json.dumps(obj, indent=2, sort_keys=True) + "\n"`.
+objects in eval-set order), serialized as the UTF-8 bytes of `json.dumps(obj, indent=2, sort_keys=True) + "\n"` (LF line
+endings, one trailing LF).
 
 ### Delta
 Added: the eval item, prediction, score and run-file contracts above. Existing playbook and schema
@@ -179,16 +180,32 @@ NOT APPLICABLE — no service, no users, no secrets.
 ## 9. BUILD ORDER
 
 §10 Bootstrap runs once before step 1. Steps run in order; each runs Do, Done when, Verify, then
-Checkpoint. Every Verify block exits 0 on a correct step under `set -e`. Before each Checkpoint the builder also runs `/tmp/fde-py312/bin/python -m pytest -q` (full suite,
-expect exit 0, 0 failed), which covers every prior step's pytest verify. Each Checkpoint stages only
+Checkpoint. Every Verify block exits 0 on a correct step under `set -e`. Before each Checkpoint the builder also runs cumulative gate G below; every line must exit 0. G holds
+every non-step-specific check of steps 1-9 (lint, full pytest, installed CLI, both config literals). Each Checkpoint stages only
 that step's declared paths, asserts the staged list equals them, commits, and tags locally. Tags are
-never pushed. Rollback for step N: `git reset --hard <previous tag>` as named in the step map (restores tracked
-files), then for each path in step N's Touches column that does not exist at that tag
-(`git cat-file -e <previous tag>:<path>` exits nonzero) remove it with `rm -f <path>`, then
-delete every step tag numbered N or higher that this run created (`git tag -d step-NN-...` for each
-such tag present), then confirm every remaining step tag is an ancestor of `HEAD` with
-`for t in $(git tag -l 'step-*'); do git merge-base --is-ancestor "$t" HEAD || exit 1; done`; for
-step 1 it is the recorded pre-build tip, `git reset --hard "$(cat /tmp/fde-build-start)"`.
+never pushed. Step rollback is an operator action, never run from the unattended allowlist (§19.3).
+Rollback for step N, where `P` is the step map's Rollback target tag for step N:
+```bash
+test "$(git branch --show-current)" = aside/tier2-portfolio-20261123            # expect: exit 0
+git rev-parse -q --verify "refs/tags/$P^{commit}"                                  # expect: exit 0, else stop
+git reset --hard "$P"
+for f in <step N Touches paths>; do git cat-file -e "$P:$f" 2>/dev/null || rm -f -- "$f"; done
+for t in <step tags numbered N or higher from the §20.1 list>; do if git rev-parse -q --verify "refs/tags/$t" >/dev/null; then git tag -d "$t"; fi; done
+```
+The two placeholder lists are filled from the step map and the ten §20.1 tag names before running;
+only those recorded tags and declared paths are ever touched. For step 1, `P` is
+`"$(cat /tmp/fde-build-start)"` and the tag list is all ten names.
+
+
+```bash
+# Cumulative gate G (run before every Checkpoint from step 1 on; covers every prior Verify)
+/tmp/fde-py312/bin/ruff check .                     # expect: exit 0
+/tmp/fde-py312/bin/python -m pytest -q              # expect: exit 0, 0 failed
+/tmp/fde-py312/bin/fde-portfolio check              # expect: exit 0
+grep -qx 'extend-exclude = \["mcp", ".rig", "blueprints"\]' pyproject.toml   # expect: exit 0
+grep -qx 'norecursedirs = \["blueprints", ".venv", ".git"\]' pyproject.toml  # expect: exit 0
+```
+From step 10 on, G also runs `bash scripts/smoke.sh` (expect exit 0).
 
 ### Step map
 | # | Step | Depends on | Touches | Gate | Rollback target |
@@ -310,8 +327,8 @@ from `tmp_path/baseline.json` and `tmp_path/improved.json` and
 `line(d) = f"{d['system']} accuracy={d['accuracy']:.4f} answered_accuracy={d['answered_accuracy']:.4f} coverage={d['coverage']:.4f} wrong_auto_routes={d['wrong_auto_routes']}"`
 (the runner prints with this same format); (d) for each saved run, the key set is exactly `{system, n, answered, abstained, correct,
 wrong_auto_routes, accuracy, answered_accuracy, coverage, predictions}`, `[p["id"] for p in predictions]`
-equals the eval-set id order, each prediction has keys exactly `{id, route, confidence}`, and the file
-bytes equal `json.dumps(json.loads(bytes), indent=2, sort_keys=True) + "\n"`; (b) using `fresh_runs`, both files in its `tmp_path` are byte-identical to the working-tree
+equals the eval-set id order, each prediction has keys exactly `{id, route, confidence}`, and
+`path.read_bytes() == (json.dumps(json.loads(path.read_bytes()), indent=2, sort_keys=True) + "\n").encode("utf-8")`; (b) using `fresh_runs`, both files in its `tmp_path` are byte-identical to the working-tree
 `docs/worked-engagement/runs/baseline.json` and `docs/worked-engagement/runs/improved.json` written
 earlier in this step (the committed-byte check is in §20.1); (c) in the saved runs, improved `wrong_auto_routes` is
 lower than baseline's, improved `answered_accuracy` is higher than baseline's, and improved
@@ -412,22 +429,13 @@ git add docs/field-record.md tests/test_field_record.py && test "$(git diff --ca
 **Do.** Write `docs/failure-taxonomy.md` with a table headed
 `| Class | Seen in | Detection signal | Mitigation |` and at least 6 rows, including the
 worked-engagement classes `confident wrong route`, `negation flip` and `empty or vague ticket`.
-Write `docs/runbook.md` with sections `## Rerun the eval`, `## Add an eval item`,
-`## Change a field-record fact`, `## Roll back`. Under each heading a fenced bash block holds the
-exact commands (any Python 3.10+; `python3` below): Rerun: `python3 docs/worked-engagement/run_eval.py` then
-`git diff --exit-code -- docs/worked-engagement/runs`; Add an eval item: append one line to
-`docs/worked-engagement/eval-set.jsonl`, rerun the runner, update the expected outcome in the step 2
-and step 5 tests and the Results table, then `python3 -m pytest -q`; Change a
-field-record fact: edit `CARDS` and `ALLOWED_NUMBERS` in `tests/test_field_record.py` from the
-confirmed record only, regenerate the file, then `python3 -m pytest -q tests/test_field_record.py`;
-Roll back: `T=step-09-adrs` (set to the checkpoint to return to), `git rev-parse -q --verify "refs/tags/$T"`,
-`git reset --hard "$T"`, then `for t in $(git tag -l 'step-*'); do git merge-base --is-ancestor "$t" HEAD || git tag -d "$t"; done`. Extend `tests/test_docs.py`: the taxonomy has the
-header and at least 6 data rows and names the three classes; the runbook has the four exact headings, and the section under each heading contains its named
-command literal (`run_eval.py`, `eval-set.jsonl`, `tests/test_field_record.py`, `git reset --hard`).
+Write `docs/runbook.md` byte for byte as the runbook literal in §19.6. Extend `tests/test_docs.py`:
+the taxonomy has the header and at least 6 data rows and names the three classes; `docs/runbook.md`
+equals the §19.6 runbook literal exactly.
 
 **Done when.**
 - WHEN the taxonomy is parsed THE SYSTEM SHALL find the header, at least 6 data rows and the three named classes.
-- WHEN the runbook is read THE SYSTEM SHALL find each of the four headings as a full line.
+- WHEN the runbook is read THE SYSTEM SHALL equal the §19.6 runbook literal byte for byte.
 
 **Verify.**
 ```bash
@@ -461,19 +469,22 @@ git add docs/adr/0001-deterministic-offline-eval.md docs/adr/0002-confidence-gat
 ### Step 10 — README reorder and smoke (`readme`)
 **Do.** In `README.md`: keep the H1 and every existing line above `## Why this exists` unchanged (no
 image line is added; the owner inserts media under the H1 in a later commit). Insert, before
-`## Why this exists`, the section `## Field record` whose body contains the link literal
-`[docs/field-record.md](docs/field-record.md)`, then the section `## Worked engagement (synthetic)`
-whose body contains the link literal `[docs/worked-engagement/README.md](docs/worked-engagement/README.md)`.
+`## Why this exists`, the line `## Field record`, a blank line, the field-record section literal in
+§19.6, a blank line, the line `## Worked engagement (synthetic)`, a blank line, the engagement section
+literal in §19.6, and a blank line.
 Rename `## Quick start (5 lines)` to `## Quick start` and keep it after both new sections. Replace the
 first paragraph of `## The operating record` with the operating-record literal in §19.6, as one line. Keep the
 CI badge, the `git clone` line, a test command and the footer that `tests/test_repo_hygiene.py`
 requires. In `scripts/smoke.sh` add `docs/field-record.md docs/runbook.md docs/failure-taxonomy.md`
 to the `for f in` list. Extend `tests/test_docs.py`: (a) the README's `![` lines are exactly the three badge lines of the base commit (CI, license, python), byte-identical and in their base positions 5-7, and no other line contains `![`;
 (b) the full lines `## Field record`, `## Worked engagement (synthetic)`, `## Quick start` appear in
-that order; (c) the text between `## Field record` and the next `## ` line contains the field-record
-link literal, the text between `## Worked engagement (synthetic)` and the next `## ` line contains the
-engagement link literal, and both link targets exist on disk; (d) the first paragraph under `## The operating record` equals the §19.6 operating-record literal
-exactly, and neither `366` nor `-repo` appears anywhere;
+that order; (c) the non-blank body between `## Field record` and the next `## ` line equals exactly the
+field-record section literal, the body under `## Worked engagement (synthetic)` equals exactly the
+engagement section literal, and both link targets exist on disk; (d) the first paragraph under `## The operating record` equals the §19.6 operating-record literal
+exactly; and a helper `census(text)` returns the matches of
+`re.compile(r"\b\d[\d,]*\s*(?:-|\s)?(?:\w+\s+){0,2}repo(?:s|sitory|sitories)?\b", re.I)` and is
+empty for the README, while a negative test asserts it is non-empty for each of
+`The fleet contains 367 repositories.`, `a 12-repo fleet` and `366 private repos`;
 (e) for each of the three new docs, a fixture copies `scripts/smoke.sh` to `tmp_path/scripts/smoke.sh` and
 copies each of the eight files in its `for f in` list (`README.md`,
 `docs/implementation-playbook.md`, `docs/architecture.md`, `docs/evaluation-strategy.md`,
@@ -484,8 +495,9 @@ copies each of the eight files in its `for f in` list (`README.md`,
 restores it.
 
 **Done when.**
-- WHEN README is scanned THE SYSTEM SHALL find only the three base badge images, the three headings in order, and no repository count.
-- WHEN each new section is read THE SYSTEM SHALL find its link literal and the link target SHALL exist.
+- WHEN README is scanned THE SYSTEM SHALL find only the three base badge images, the three headings in order, and `census` SHALL return no match.
+- WHEN `census` scans each of the three negative census sentences THE SYSTEM SHALL return a match.
+- WHEN each new section is read THE SYSTEM SHALL equal its §19.6 section literal and its link target SHALL exist.
 - WHEN smoke runs with one new doc missing THE SYSTEM SHALL exit 1.
 - WHEN the full suite runs THE SYSTEM SHALL exit 0 with 0 failed.
 
@@ -521,7 +533,7 @@ git rev-parse HEAD > /tmp/fde-build-start   # records the pre-build tip
 ```bash
 # 10b. Repeatable environment setup (safe to rerun at any time; every line exits 0)
 test -x /tmp/fde-py312/bin/python || uv venv -p 3.12 /tmp/fde-py312
-/tmp/fde-py312/bin/python -c 'import sys; assert sys.version_info[:2] == (3, 12), sys.version'   # expect: exit 0. On failure: `rm -rf /tmp/fde-py312` (build-owned, outside the repo) and rerun 10b
+/tmp/fde-py312/bin/python -c 'import sys; assert sys.version_info[:2] == (3, 12), sys.version'   # expect: exit 0. On failure, stop and report; the operator recreates `/tmp/fde-py312`
 uv pip install --python /tmp/fde-py312/bin/python -e '.[dev]'
 /tmp/fde-py312/bin/python -m pytest -q   # expect: exit 0, 0 failed (45 passed on the pre-build tip)
 ```
@@ -538,10 +550,8 @@ No new dependencies. `pyproject.toml` declares minimum constraints, not pins (`P
 
 ## 12. Deployment Strategy
 No deploy. Work stays on the local branch. Step rollback: the step map's Rollback target column.
-Whole-change rollback, limited to refs this run created: `git switch aside/tier2-portfolio-20261123`;
-`for t in step-01-workspace step-02-eval-set step-03-score step-04-systems step-05-runs step-06-engagement-readme step-07-field-record step-08-ops-docs step-09-adrs step-10-readme; do if git rev-parse -q --verify "refs/tags/$t" >/dev/null && ! git merge-base --is-ancestor "$t" "$(cat /tmp/fde-build-start)"; then git tag -d "$t"; fi; done`;
-`git reset --hard "$(cat /tmp/fde-build-start)"`; `git switch main`. The branch and any tag that predates
-the recorded start are kept. Tags are local only. Push is
+Whole-change rollback (operator action, not allowlisted): the step 1 rollback above, then
+`git switch main`. The branch, and any tag that existed before §10a recorded the start, are kept. Push is
 Gate-D.
 
 ## 13. Testing Strategy
@@ -657,7 +667,9 @@ Builder-session allowlist, not committed. Activation, before §10 Bootstrap: an 
 Claude Code builder writes this block to `/tmp/fde-claude-settings.json` (outside the checkout,
 so `git status --porcelain` stays clean) and starts with `claude --settings /tmp/fde-claude-settings.json`; an Aside or Codex builder runs
 under its own session approval and needs no file. Each subcommand of every Verify, Checkpoint,
-Bootstrap and §20.1 line has an entry, including the ten exact `git tag` commands:
+Bootstrap, gate G and §20.1 line has an exact or command-scoped entry, including the ten exact
+`git tag` commands. Destructive commands (`git reset --hard`, `git tag -d`, `rm -f`, `rm -rf`) are
+denied: rollback and venv recreation are operator actions approved per run.
 ```json
 {
   "permissions": {
@@ -675,7 +687,6 @@ Bootstrap and §20.1 line has an entry, including the ten exact `git tag` comman
       "Bash(uv python find 3.12)",
       "Bash(uv venv -p 3.12 /tmp/fde-py312)",
       "Bash(uv pip install --python /tmp/fde-py312/bin/python -e '.[dev]')",
-      "Bash(test:*)",
       "Bash(git add:*)",
       "Bash(git commit -m:*)",
       "Bash(git tag step-01-workspace)",
@@ -688,17 +699,21 @@ Bootstrap and §20.1 line has an entry, including the ten exact `git tag` comman
       "Bash(git tag step-08-ops-docs)",
       "Bash(git tag step-09-adrs)",
       "Bash(git tag step-10-readme)",
-      "Bash(git tag -d:*)",
-      "Bash(rm -f:*)",
-      "Bash(git tag -l step-*)",
-      "Bash(git merge-base --is-ancestor:*)",
-      "Bash(git reset --hard:*)",
       "Bash(cat /tmp/fde-build-start)",
-      "Bash(rm -rf /tmp/fde-py312)",
       "Bash(/tmp/fde-py312/bin/python -c 'import sys; assert sys.version_info[:2] == (3, 12), sys.version')",
       "Bash(git ls-files --error-unmatch:*)",
+      "Bash(git check-ignore --no-index -q --:*)",
+      "Bash(git merge-base --is-ancestor 15cba0fbc6bf08dfabd060b1ab1e97d0512d22ba HEAD)",
+      "Bash(grep -qx 'extend-exclude = \\[\"mcp\", \".rig\", \"blueprints\"\\]' pyproject.toml)",
+      "Bash(grep -qx 'norecursedirs = \\[\"blueprints\", \".venv\", \".git\"\\]' pyproject.toml)",
+      "Bash(git diff --cached --name-only)",
+      "Bash(git diff --exit-code -- docs/worked-engagement/runs)",
+      "Bash(git rev-parse HEAD)",
+      "Bash(test -x /tmp/fde-py312/bin/python)",
+      "Bash(test -z:*)",
+      "Bash(test \"$(git diff --cached --name-only:*)",
+      "Bash(test \"$rc\" -eq 1)",
       "Bash(git diff --exit-code HEAD -- docs/worked-engagement/runs)",
-      "Bash(grep -qx:*)",
       "Bash(echo:*)",
       "Bash(set -euo pipefail)",
       "Bash(exit 1)",
@@ -707,12 +722,10 @@ Bootstrap and §20.1 line has an entry, including the ten exact `git tag` comman
       "Bash(git cat-file:*)",
       "Bash(git status --porcelain)",
       "Bash(git rev-parse:*)",
-      "Bash(git diff:*)",
-      "Bash(git ls-files:*)",
       "Bash(LC_ALL=C sort)",
       "Bash(tr:*)"
     ],
-    "deny": ["Bash(git push:*)", "Read(.env)", "Bash(git reset --hard origin:*)", "Bash(git branch -D:*)"]
+    "deny": ["Bash(git push:*)", "Read(.env)", "Bash(git reset --hard:*)", "Bash(git branch -D:*)", "Bash(git tag -d:*)", "Bash(rm -f:*)", "Bash(rm -rf:*)"]
   }
 }
 ```
@@ -745,6 +758,39 @@ Every file a Verify or §20.1 command names is created by a step: `CLAUDE.md`, `
 `tests/test_scorer.py` (2); `tests/test_systems.py` (4); `docs/worked-engagement/run_eval.py` and both
 run files (5); `tests/test_docs.py` (6); `tests/test_field_record.py` (7); `scripts/smoke.sh` edited (10,
 exists on base).
+
+Field-record section literal (README, one line, exact):
+```text
+Every claim in [docs/field-record.md](docs/field-record.md) is confirmed against the maintainer's private career record, employers appear as sector pseudonyms, and the gaps are listed rather than filled.
+```
+
+Engagement section literal (README, one line, exact):
+```text
+[docs/worked-engagement/README.md](docs/worked-engagement/README.md) is a synthetic ticket-routing engagement: a frozen 34-item eval set, a baseline and an improved router, and results that one command reproduces byte for byte.
+```
+
+Runbook literal (`docs/runbook.md`, exact bytes, one trailing LF):
+````markdown
+# Runbook
+
+## Rerun the eval
+
+Requires Python 3.10 or newer, standard library only.
+
+```bash
+python3 docs/worked-engagement/run_eval.py
+git diff --exit-code -- docs/worked-engagement/runs
+```
+
+The second command exits 0 when the rerun reproduces the committed results byte for byte.
+
+## Change the eval set or a field-record fact
+
+The eval set, the routers and the field record are frozen. Their bytes are pinned by
+SHA-256 digests and exact-text tests, so any edit fails the suite on purpose. A change
+needs a new blueprint that states the new fixture, the new digests and the new expected
+results, and the owner's approval of it.
+````
 
 Operating-record literal (step 10, one line, exact):
 ```text
@@ -859,6 +905,9 @@ improved `accuracy=0.8529 answered_accuracy=1.0000 coverage=0.8529 wrong_auto_ro
 | SYNTHETIC banner | step 6 literal | step 6 test, line 3 string equality | yes |
 | `docs/field-record.md` bytes | `render(CARDS)` from §14 literals | step 7 test (f), string equality | yes |
 | operating-record paragraph | §19.6 literal | step 10 test (d), string equality | yes |
+| README section bodies | §19.6 section literals | step 10 test (c), string equality | yes |
+| `docs/runbook.md` bytes | §19.6 runbook literal | step 8 test, byte equality | yes |
+| saved run bytes | §4 UTF-8 canonical JSON | step 5 test (d), bytes equality | yes |
 
 Runtime confirmation of these rows is recorded only after the builder runs those tests.
 
@@ -908,6 +957,13 @@ in the engagement README are compared against the run files by step 6's test.
 | README headings | `## Field record`, `## Worked engagement (synthetic)`, `## Quick start` | step 10 | §1 target | yes |
 | README links | `[docs/field-record.md](docs/field-record.md)`, `[docs/worked-engagement/README.md](docs/worked-engagement/README.md)` | step 10 | none | yes |
 | no-new-image rule | only the three base badge lines contain `![` | step 10 test (a) | §1 target, Non-Goals, §15 | yes |
+| runner output flag | `--out DIR` | §5 | step 5 Do, step 5 test (a) argv `"--out"` | yes |
+| public rerun command | `python3 docs/worked-engagement/run_eval.py` | step 6 Do | step 6 test, §19.6 runbook literal | yes |
+| pytest src path | `pythonpath = ["src"]` | §19.6 block | §19.6 resolution matrix | yes |
+| field-record section literal | §19.6 field-record section literal | §19.6 | step 10 Do, step 10 test (c) | yes |
+| engagement section literal | §19.6 engagement section literal | §19.6 | step 10 Do, step 10 test (c) | yes |
+| runbook literal | §19.6 runbook literal | §19.6 | step 8 Do, step 8 test | yes |
+| census pattern | `\b\d[\d,]*\s*(?:-\|\s)?(?:\w+\s+){0,2}repo(?:s\|sitory\|sitories)?\b` | step 10 test (d) | none | yes |
 | build python | `/tmp/fde-py312/bin/python` | §10b | every Verify, §19.1, §19.3, §20.1 | yes |
 | build ruff | `/tmp/fde-py312/bin/ruff` | §19.1 | every Verify, §19.3, §20.1 | yes |
 | build CLI | `/tmp/fde-py312/bin/fde-portfolio` | §19.1 | §19.3, §20.1, §19.6 matrix | yes |
@@ -946,7 +1002,8 @@ in the engagement README are compared against the run files by step 6's test.
 
 ### 20.1 Global acceptance gate
 Run as one script under `set -euo pipefail`; the first nonzero status fails the gate. It checks each
-of the 21 unique Touches paths individually.
+of the 21 unique Touches paths individually for tracking and, with `git check-ignore --no-index`,
+requires exit status exactly 1 (no `.gitignore` rule matches).
 ```bash
 set -euo pipefail
 /tmp/fde-py312/bin/ruff check .                                            # expect: exit 0
@@ -955,26 +1012,47 @@ set -euo pipefail
 bash scripts/smoke.sh                                             # expect: exit 0
 test -z "$(git status --porcelain)"   # expect: exit 0, clean checkout
 git ls-files --error-unmatch CLAUDE.md   # expect: exit 0
+rc=0; git check-ignore --no-index -q -- CLAUDE.md || rc=$?; test "$rc" -eq 1   # expect: exit 0, no ignore rule matches
 git ls-files --error-unmatch pyproject.toml   # expect: exit 0
+rc=0; git check-ignore --no-index -q -- pyproject.toml || rc=$?; test "$rc" -eq 1   # expect: exit 0, no ignore rule matches
 git ls-files --error-unmatch docs/worked-engagement/eval-set.jsonl   # expect: exit 0
+rc=0; git check-ignore --no-index -q -- docs/worked-engagement/eval-set.jsonl || rc=$?; test "$rc" -eq 1   # expect: exit 0, no ignore rule matches
 git ls-files --error-unmatch docs/worked-engagement/scorer.py   # expect: exit 0
+rc=0; git check-ignore --no-index -q -- docs/worked-engagement/scorer.py || rc=$?; test "$rc" -eq 1   # expect: exit 0, no ignore rule matches
 git ls-files --error-unmatch tests/test_scorer.py   # expect: exit 0
+rc=0; git check-ignore --no-index -q -- tests/test_scorer.py || rc=$?; test "$rc" -eq 1   # expect: exit 0, no ignore rule matches
 git ls-files --error-unmatch docs/worked-engagement/systems.py   # expect: exit 0
+rc=0; git check-ignore --no-index -q -- docs/worked-engagement/systems.py || rc=$?; test "$rc" -eq 1   # expect: exit 0, no ignore rule matches
 git ls-files --error-unmatch tests/test_systems.py   # expect: exit 0
+rc=0; git check-ignore --no-index -q -- tests/test_systems.py || rc=$?; test "$rc" -eq 1   # expect: exit 0, no ignore rule matches
 git ls-files --error-unmatch docs/worked-engagement/run_eval.py   # expect: exit 0
+rc=0; git check-ignore --no-index -q -- docs/worked-engagement/run_eval.py || rc=$?; test "$rc" -eq 1   # expect: exit 0, no ignore rule matches
 git ls-files --error-unmatch docs/worked-engagement/runs/baseline.json   # expect: exit 0
+rc=0; git check-ignore --no-index -q -- docs/worked-engagement/runs/baseline.json || rc=$?; test "$rc" -eq 1   # expect: exit 0, no ignore rule matches
 git ls-files --error-unmatch docs/worked-engagement/runs/improved.json   # expect: exit 0
+rc=0; git check-ignore --no-index -q -- docs/worked-engagement/runs/improved.json || rc=$?; test "$rc" -eq 1   # expect: exit 0, no ignore rule matches
 git ls-files --error-unmatch docs/worked-engagement/README.md   # expect: exit 0
+rc=0; git check-ignore --no-index -q -- docs/worked-engagement/README.md || rc=$?; test "$rc" -eq 1   # expect: exit 0, no ignore rule matches
 git ls-files --error-unmatch tests/test_docs.py   # expect: exit 0
+rc=0; git check-ignore --no-index -q -- tests/test_docs.py || rc=$?; test "$rc" -eq 1   # expect: exit 0, no ignore rule matches
 git ls-files --error-unmatch docs/field-record.md   # expect: exit 0
+rc=0; git check-ignore --no-index -q -- docs/field-record.md || rc=$?; test "$rc" -eq 1   # expect: exit 0, no ignore rule matches
 git ls-files --error-unmatch tests/test_field_record.py   # expect: exit 0
+rc=0; git check-ignore --no-index -q -- tests/test_field_record.py || rc=$?; test "$rc" -eq 1   # expect: exit 0, no ignore rule matches
 git ls-files --error-unmatch docs/failure-taxonomy.md   # expect: exit 0
+rc=0; git check-ignore --no-index -q -- docs/failure-taxonomy.md || rc=$?; test "$rc" -eq 1   # expect: exit 0, no ignore rule matches
 git ls-files --error-unmatch docs/runbook.md   # expect: exit 0
+rc=0; git check-ignore --no-index -q -- docs/runbook.md || rc=$?; test "$rc" -eq 1   # expect: exit 0, no ignore rule matches
 git ls-files --error-unmatch docs/adr/0001-deterministic-offline-eval.md   # expect: exit 0
+rc=0; git check-ignore --no-index -q -- docs/adr/0001-deterministic-offline-eval.md || rc=$?; test "$rc" -eq 1   # expect: exit 0, no ignore rule matches
 git ls-files --error-unmatch docs/adr/0002-confidence-gate-abstain-to-human.md   # expect: exit 0
+rc=0; git check-ignore --no-index -q -- docs/adr/0002-confidence-gate-abstain-to-human.md || rc=$?; test "$rc" -eq 1   # expect: exit 0, no ignore rule matches
 git ls-files --error-unmatch docs/adr/0003-claim-labels-and-pseudonyms.md   # expect: exit 0
+rc=0; git check-ignore --no-index -q -- docs/adr/0003-claim-labels-and-pseudonyms.md || rc=$?; test "$rc" -eq 1   # expect: exit 0, no ignore rule matches
 git ls-files --error-unmatch README.md   # expect: exit 0
+rc=0; git check-ignore --no-index -q -- README.md || rc=$?; test "$rc" -eq 1   # expect: exit 0, no ignore rule matches
 git ls-files --error-unmatch scripts/smoke.sh   # expect: exit 0
+rc=0; git check-ignore --no-index -q -- scripts/smoke.sh || rc=$?; test "$rc" -eq 1   # expect: exit 0, no ignore rule matches
 /tmp/fde-py312/bin/python docs/worked-engagement/run_eval.py   # expect: exit 0
 git diff --exit-code HEAD -- docs/worked-engagement/runs   # expect: exit 0, rerun equals committed bytes
 for t in step-01-workspace step-02-eval-set step-03-score step-04-systems step-05-runs step-06-engagement-readme step-07-field-record step-08-ops-docs step-09-adrs step-10-readme; do git rev-parse -q --verify "refs/tags/$t^{commit}" >/dev/null || exit 1; done   # expect: exit 0, all ten tags resolve
