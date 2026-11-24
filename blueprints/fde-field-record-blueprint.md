@@ -11,7 +11,7 @@ local machine path and no private document path.
 ### Vision
 `fde-portfolio` is a public Forward Deployed Engineering repository: five YAML engagement playbooks,
 two JSON Schemas and a CLI that renders a worksheet. It shows a checklist engine and no deployment
-evidence. This change adds a labeled field record of confirmed deployments (sector pseudonyms only),
+evidence. This change adds a labeled field record of confirmed engagements (sector pseudonyms only),
 one clearly SYNTHETIC worked engagement whose eval numbers come from running code in the repo, a
 failure taxonomy, three ADRs and a runbook, and reorders the README so evidence comes first.
 
@@ -89,6 +89,7 @@ The builder must not implement anything in this table.
 ## 3. Directory Structure
 ```
 fde-portfolio/
+├── AGENTS.md                                   # step 1 (one appended line)
 ├── CLAUDE.md                                   # step 1
 ├── pyproject.toml                              # step 1 (two exclusion lines)
 ├── README.md                                   # step 10
@@ -117,7 +118,7 @@ fde-portfolio/
 ```
 
 ### Existing inputs (read, not changed)
-`AGENTS.md`, `.github/copilot-instructions.md`, `CASE-STUDIES.md`, `tests/test_repo_hygiene.py`,
+`.github/copilot-instructions.md`, `CASE-STUDIES.md`, `tests/test_repo_hygiene.py`,
 `tests/test_cli.py`, `tests/test_playbooks.py`, `tests/test_render_headings.py`, and the four original
 smoke inputs `docs/implementation-playbook.md`, `docs/architecture.md`,
 `docs/evaluation-strategy.md`, `docs/public-boundary.md`.
@@ -125,7 +126,7 @@ smoke inputs `docs/implementation-playbook.md`, `docs/architecture.md`,
 ### Delta
 Added: `CLAUDE.md`, every `docs/worked-engagement/` file, `docs/field-record.md`,
 `docs/failure-taxonomy.md`, `docs/runbook.md`, the three ADRs and the four test files. Modified:
-`README.md`, `scripts/smoke.sh`, `pyproject.toml`. Untouched: `src/`, `.github/`, every other file.
+`README.md`, `scripts/smoke.sh`, `pyproject.toml`, `AGENTS.md` (one appended bridge line). Untouched: `src/`, `.github/`, every other file.
 
 ## 4. Data Model
 Eval item, one JSON object per line of `eval-set.jsonl`:
@@ -187,8 +188,9 @@ never pushed. Step rollback is an operator action, never run from the unattended
 Rollback for step N, where `P` is the fully qualified ref of the step map's Rollback target tag for
 step N (for example `refs/tags/step-04-systems`):
 ```bash
-test "$(git branch --show-current)" = aside/tier2-portfolio-20261123            # expect: exit 0
-git rev-parse -q --verify "$P^{commit}"                                  # expect: exit 0, else stop
+set -euo pipefail
+test "$(git branch --show-current)" = aside/tier2-portfolio-20261123 || { echo "wrong branch"; exit 1; }
+git rev-parse -q --verify "$P^{commit}" >/dev/null || { echo "invalid rollback ref: $P"; exit 1; }
 git reset --hard "$P"
 for f in <step N Touches paths>; do git cat-file -e "$P:$f" 2>/dev/null || rm -f -- "$f"; done
 for t in <step tags numbered N or higher from the §20.1 list>; do if git rev-parse -q --verify "refs/tags/$t" >/dev/null; then git tag -d "$t"; fi; done
@@ -205,7 +207,8 @@ recorded SHA itself, `P="$(cat /tmp/fde-build-start)"`, which `git rev-parse` re
 /tmp/fde-py312/bin/fde-portfolio check              # expect: exit 0
 grep -Fqx 'extend-exclude = ["mcp", ".rig", "blueprints"]' pyproject.toml   # expect: exit 0
 grep -Fqx 'norecursedirs = ["blueprints", ".venv", ".git"]' pyproject.toml  # expect: exit 0
-test "$(shasum -a 256 CLAUDE.md | cut -d' ' -f1)" = fec1dbdc1c688ade145faa63a548faa55fd8fdb9889eb9ed671a90d622179d3e   # expect: exit 0, CLAUDE.md equals §19.1
+test "$(shasum -a 256 CLAUDE.md | cut -d' ' -f1)" = 83a6bd88c7b1759801a38c726daa94bf48633960567204fd8e08a5b5c8d9d887   # expect: exit 0, CLAUDE.md equals §19.1
+{ git show 15cba0fbc6bf08dfabd060b1ab1e97d0512d22ba:AGENTS.md; printf '%s\n' 'Build, lint, test and eval commands: see CLAUDE.md (canonical).'; } | cmp - AGENTS.md   # expect: exit 0, base AGENTS.md plus the one bridge line
 ```
 From step 5 on, G also runs the default (no-argument) runner in an isolated copy:
 ```bash
@@ -216,7 +219,7 @@ From step 10 on, G also runs `bash scripts/smoke.sh` (expect exit 0).
 ### Step map
 | # | Step | Depends on | Touches | Gate | Rollback target |
 |---|---|---|---|---|---|
-| 1 | workspace | — | `CLAUDE.md`, `pyproject.toml` | `/tmp/fde-py312/bin/python -m pytest -q` | the recorded start tip in `/tmp/fde-build-start` |
+| 1 | workspace | — | `AGENTS.md`, `CLAUDE.md`, `pyproject.toml` | `/tmp/fde-py312/bin/python -m pytest -q` | the recorded start tip in `/tmp/fde-build-start` |
 | 2 | eval-set | 1 | `docs/worked-engagement/eval-set.jsonl`, `docs/worked-engagement/scorer.py`, `tests/test_scorer.py` | `/tmp/fde-py312/bin/python -m pytest -q tests/test_scorer.py` | `step-01-workspace` |
 | 3 | score | 2 | `docs/worked-engagement/scorer.py`, `tests/test_scorer.py` | `/tmp/fde-py312/bin/python -m pytest -q tests/test_scorer.py` | `step-02-eval-set` |
 | 4 | systems | 3 | `docs/worked-engagement/systems.py`, `tests/test_systems.py` | `/tmp/fde-py312/bin/python -m pytest -q tests/test_systems.py` | `step-03-score` |
@@ -231,14 +234,16 @@ From step 10 on, G also runs `bash scripts/smoke.sh` (expect exit 0).
 **Do.** Write `CLAUDE.md` with the exact content in §19.1. In `pyproject.toml` change
 `extend-exclude = ["mcp", ".rig"]` to `extend-exclude = ["mcp", ".rig", "blueprints"]` and add the line
 `norecursedirs = ["blueprints", ".venv", ".git"]` under `[tool.pytest.ini_options]` (final block in
-§19.6). Files: `CLAUDE.md`, `pyproject.toml`. The blueprint is an input: it is already committed on the
+§19.6). Append to `AGENTS.md` exactly one line, `Build, lint, test and eval commands: see CLAUDE.md (canonical).`, keeping every
+existing line unchanged. Files: `AGENTS.md`, `CLAUDE.md`, `pyproject.toml`. The blueprint is an input: it is already committed on the
 branch before Bootstrap, and §10 verifies it is tracked.
 
 **Done when.**
 - WHEN `/tmp/fde-py312/bin/python -m pytest -q` runs THE SYSTEM SHALL exit 0 with 0 failed.
 - WHEN `/tmp/fde-py312/bin/ruff check .` runs THE SYSTEM SHALL exit 0.
 - WHEN `/tmp/fde-py312/bin/fde-portfolio check` runs THE SYSTEM SHALL exit 0.
-- WHEN `CLAUDE.md` is hashed THE SYSTEM SHALL equal the SHA-256 of the §19.1 block, `fec1dbdc1c688ade145faa63a548faa55fd8fdb9889eb9ed671a90d622179d3e`.
+- WHEN `AGENTS.md` is compared with the base file plus the bridge line THE SYSTEM SHALL find them byte-identical.
+- WHEN `CLAUDE.md` is hashed THE SYSTEM SHALL equal the SHA-256 of the §19.1 block, `83a6bd88c7b1759801a38c726daa94bf48633960567204fd8e08a5b5c8d9d887`.
 - WHEN `pyproject.toml` is read THE SYSTEM SHALL contain the literal `"blueprints"` in both `extend-exclude` and `norecursedirs`.
 
 **Verify.**
@@ -248,11 +253,12 @@ branch before Bootstrap, and §10 verifies it is tracked.
 grep -Fqx 'extend-exclude = ["mcp", ".rig", "blueprints"]' pyproject.toml   # expect: exit 0
 grep -Fqx 'norecursedirs = ["blueprints", ".venv", ".git"]' pyproject.toml  # expect: exit 0
 /tmp/fde-py312/bin/fde-portfolio check   # expect: exit 0, installed console script works
-test "$(shasum -a 256 CLAUDE.md | cut -d' ' -f1)" = fec1dbdc1c688ade145faa63a548faa55fd8fdb9889eb9ed671a90d622179d3e   # expect: exit 0, CLAUDE.md equals the §19.1 block
+test "$(shasum -a 256 CLAUDE.md | cut -d' ' -f1)" = 83a6bd88c7b1759801a38c726daa94bf48633960567204fd8e08a5b5c8d9d887   # expect: exit 0, CLAUDE.md equals the §19.1 block
+{ git show 15cba0fbc6bf08dfabd060b1ab1e97d0512d22ba:AGENTS.md; printf '%s\n' 'Build, lint, test and eval commands: see CLAUDE.md (canonical).'; } | cmp - AGENTS.md   # expect: exit 0, base AGENTS.md plus the one bridge line
 ```
 **Checkpoint.**
 ```bash
-git add CLAUDE.md pyproject.toml && test "$(git diff --cached --name-only | LC_ALL=C sort | tr '\n' ' ')" = "CLAUDE.md pyproject.toml " && git commit -m "step 1: workspace" && git tag step-01-workspace
+git add AGENTS.md CLAUDE.md pyproject.toml && test "$(git diff --cached --name-only | LC_ALL=C sort | tr '\n' ' ')" = "AGENTS.md CLAUDE.md pyproject.toml " && git commit -m "step 1: workspace" && git tag step-01-workspace
 ```
 
 ### Step 2 — eval set and loader (`eval-set`)
@@ -328,7 +334,7 @@ git add docs/worked-engagement/systems.py tests/test_systems.py && test "$(git d
 **Do.** Write `docs/worked-engagement/run_eval.py` per §5 with an optional `--out DIR` (default: the
 `runs/` folder beside the script). Run `/tmp/fde-py312/bin/python docs/worked-engagement/run_eval.py` once to
 write the two run files. Extend `tests/test_systems.py` with a fixture `fresh_runs(tmp_path)` that runs the CLI into that
-test's own `tmp_path` and returns `(stdout, tmp_path)`, and four tests (a)-(d): (a) runs `[sys.executable, "docs/worked-engagement/run_eval.py", "--out", str(tmp_path)]` with
+test's own `tmp_path` and returns `(stdout, tmp_path)`, and six tests (a)-(f): (a) runs `[sys.executable, "docs/worked-engagement/run_eval.py", "--out", str(tmp_path)]` with
 `subprocess.run(capture_output=True, text=True)`, asserts return code 0, and asserts
 `stdout.splitlines()` equals exactly `[line(b), line(i)]`, where `b` and `i` are the JSON objects read
 from `tmp_path/baseline.json` and `tmp_path/improved.json` and
@@ -340,7 +346,12 @@ equals the eval-set id order, each prediction has keys exactly `{id, route, conf
 `docs/worked-engagement/runs/baseline.json` and `docs/worked-engagement/runs/improved.json` written
 earlier in this step (the committed-byte check is in §20.1); (c) in the saved runs, improved `wrong_auto_routes` is
 lower than baseline's, improved `answered_accuracy` is higher than baseline's, and improved
-`coverage` is at least 0.8; and both saved runs equal the §19.6 expected published outcome.
+`coverage` is at least 0.8; and both saved runs equal the §19.6 expected published outcome; (e) for each saved run, `system` is
+`baseline` or `improved` respectively, every saved prediction's `(route, confidence)` equals
+`systems.<system>(text)` for the eval item with that id, and `scorer.score(system, items, preds)`
+recomputed from the fixture and the saved predictions equals the saved score fields; (f) a fixture copy
+in `tmp_path` with item `T001` relabelled from `billing` to `other`, run through the runner with
+`--out`, changes baseline `correct` versus the saved run.
 
 **Done when.**
 - WHEN the runner runs into a temporary folder THE SYSTEM SHALL exit 0 and print exactly the baseline line then the improved line, each equal to the line built from its JSON file.
@@ -360,7 +371,7 @@ git add docs/worked-engagement/run_eval.py docs/worked-engagement/runs/baseline.
 
 ### Step 6 — worked engagement README (`engagement-readme`)
 **Do.** Write `docs/worked-engagement/README.md`. Line 1 `# Worked engagement: payments ticket routing`,
-line 2 blank, line 3 exactly the banner literal `> SYNTHETIC. Fictional company, fictional tickets. Every number below is produced by run_eval.py.` (no backticks inside it)
+line 2 blank, line 3 exactly the banner literal `> SYNTHETIC. Fictional company, fictional tickets. Every result in the table below is produced by run_eval.py.` (no backticks inside it)
 Then sections `## Brief`, `## Constraints`, `## Method`, `## Results`, `## Rerun`. Under `## Rerun`
 the line `Requires Python 3.10 or newer, standard library only.` and a fenced bash block holding
 exactly `python3 docs/worked-engagement/run_eval.py`. Under `## Results`
@@ -384,6 +395,8 @@ line): its table lines are exactly, in order, the header
 ```bash
 /tmp/fde-py312/bin/python -m pytest -q tests/test_docs.py   # expect: exit 0, 0 failed
 /tmp/fde-py312/bin/ruff check .                             # expect: exit 0
+PATH=/tmp/fde-py312/bin:$PATH python3 --version            # expect: Python 3.12.x (reader minimum is 3.10)
+PATH=/tmp/fde-py312/bin:$PATH python3 docs/worked-engagement/run_eval.py && git diff --exit-code -- docs/worked-engagement/runs   # expect: exit 0, the published reader command reproduces the saved runs
 ```
 **Checkpoint.**
 ```bash
@@ -393,22 +406,22 @@ git add docs/worked-engagement/README.md tests/test_docs.py && test "$(git diff 
 ### Step 7 — field record (`field-record`)
 **Do.** Write `docs/field-record.md` with exactly this structure and only the literals in §14:
 1. Line 1 `# Field record`; line 3 the legend literal from §14.
-2. A table with header `| Deployment | Years | Sector |`, separator `|---|---|---|`, then the four
-   §14 card rows in §14 order, each written as `| <Deployment> | <Years> | <Sector> |`.
-3. One card per row: heading `### <Deployment>`, then the line `**Evidence.**`, then one bullet
+2. A table with header `| Engagement | Years | Sector |`, separator `|---|---|---|`, then the four
+   §14 card rows in §14 order, each written as `| <Engagement> | <Years> | <Sector> |`.
+3. One card per row: heading `### <Engagement>`, then the line `**Evidence.**`, then one bullet
    `- <claim> [confirmed]` per §14 claim for that card, in §14 order, then the line
    `**Not yet evidenced.**`, then one bullet `- <gap>` per §14 gap for that card.
 No other bullet lines. Unknown facts are never written as claims: a fact the source corpus does not
 hold appears only as a §14 gap string, never as text under `**Evidence.**`.
-Write `tests/test_field_record.py` holding `CARDS` (a list copied verbatim from §14: deployment,
+Write `tests/test_field_record.py` holding `CARDS` (a list copied verbatim from §14: engagement,
 years, sector, claims, gaps) and asserting: (a) the four table rows equal the §14 rows exactly and in
 order; (b) for each card, the bullets under `**Evidence.**` equal exactly `[f"- {c} [confirmed]" for c
 in claims]` and the bullets under `**Not yet evidenced.**` equal exactly `[f"- {g}" for g in gaps]`;
 (c) the file contains no `[inferred]` and no `[unverified]`, and every bullet line in the file is one
 of the bullets in (b); (d) every number token matching `\d[\d,]*(\.\d+)?` is in `ALLOWED_NUMBERS`;
-(e) every line starting `### ` is one of the four §14 deployment pseudonyms (the exact pseudonym
+(e) every line starting `### ` is one of the four §14 engagement pseudonyms (the exact pseudonym
 allowlist); (f) `path.read_bytes() == render(CARDS).encode("utf-8")`, where `render` builds exactly: `# Field record`, blank, legend, blank,
-the table header, separator and four rows, then for each card a blank line, `### <Deployment>`, blank,
+the table header, separator and four rows, then for each card a blank line, `### <Engagement>`, blank,
 `**Evidence.**`, blank, its claim bullets, blank, `**Not yet evidenced.**`, blank, its gap bullets,
 and a final newline; (g) both (f) and (g) call one helper `validate(path) -> None` that raises
 `AssertionError` unless the file at `path` equals `render(CARDS)`; (f) calls it on
@@ -448,6 +461,7 @@ equals the §19.6 runbook literal exactly.
 **Verify.**
 ```bash
 /tmp/fde-py312/bin/python -m pytest -q tests/test_docs.py   # expect: exit 0, 0 failed
+PATH=/tmp/fde-py312/bin:$PATH python3 docs/worked-engagement/run_eval.py && git diff --exit-code HEAD -- docs/worked-engagement/runs   # expect: exit 0, the exact runbook command
 ```
 **Checkpoint.**
 ```bash
@@ -530,16 +544,19 @@ NOT APPLICABLE — additive change; nothing is migrated, replaced or cut over. T
 and playbooks keep their existing tests as the parity check.
 
 ## 10. Environment Setup
-Environment variables: none. Prerequisites: `git`, `uv` (checked with `uv --version`; 0.13.1
+Environment variables: none to configure. `LC_ALL=C` is set command-locally on every Checkpoint's
+`sort` so the staged-path order is byte-deterministic; it needs no user configuration. Prerequisites: `git`, `uv` (checked with `uv --version`; 0.13.1
 observed), Python 3.12 available to `uv` (checked with `uv python find 3.12`). Bootstrap has two
 blocks: 10a runs once before step 1; 10b is repeatable and exits 0 on every line on any rerun:
 ```bash
-# 10a. One-time preflight (run once, before step 1)
+# 10a. One-time preflight (run once, before step 1); any failure exits before the start tip is written
+set -euo pipefail
 git show-ref -q --verify refs/heads/aside/tier2-portfolio-20261123   # expect: exit 0; the prepared branch exists
-git switch aside/tier2-portfolio-20261123
-git merge-base --is-ancestor 15cba0fbc6bf08dfabd060b1ab1e97d0512d22ba HEAD   # expect: exit 0
-git cat-file -e HEAD:blueprints/fde-field-record-blueprint.md   # expect: exit 0, HEAD contains the blueprint
-test -z "$(git status --porcelain)"   # expect: exit 0, index and worktree clean
+git switch aside/tier2-portfolio-20261123 || exit 1
+test "$(git branch --show-current)" = aside/tier2-portfolio-20261123 || exit 1
+git merge-base --is-ancestor 15cba0fbc6bf08dfabd060b1ab1e97d0512d22ba HEAD || exit 1   # expect: exit 0
+git cat-file -e HEAD:blueprints/fde-field-record-blueprint.md || exit 1   # expect: exit 0, HEAD contains the blueprint
+test -z "$(git status --porcelain)" || exit 1   # expect: exit 0, index and worktree clean
 for t in step-01-workspace step-02-eval-set step-03-score step-04-systems step-05-runs step-06-engagement-readme step-07-field-record step-08-ops-docs step-09-adrs step-10-readme; do if git rev-parse -q --verify "refs/tags/$t" >/dev/null; then echo "tag conflict: $t -> $(git rev-parse "refs/tags/$t")"; exit 1; fi; done   # expect: exit 0; a pre-existing step tag stops the build, nothing is deleted
 git rev-parse HEAD > /tmp/fde-build-start   # records the pre-build tip
 ```
@@ -583,7 +600,7 @@ never appear in public copy. The literals are copied here so the blueprint is se
 Legend literal (line 3 of `docs/field-record.md`):
 `Every claim below is [confirmed] against the maintainer's private career record. Employers and clients appear as sector pseudonyms. Gaps are listed, not filled.`
 
-| Deployment | Years | Sector |
+| Engagement | Years | Sector |
 |---|---|---|
 | Independent AI practice | 2025 to now | Banking and payments |
 | Health IT vendor, AI portfolio | 2021 to 2026 | Health IT |
@@ -592,7 +609,7 @@ Legend literal (line 3 of `docs/field-record.md`):
 
 Claims (each written publicly as `- <claim> [confirmed]`):
 
-| Deployment | Claim (exact text) |
+| Engagement | Claim (exact text) |
 |---|---|
 | Independent AI practice | 8 client engagements since 2025 |
 | Independent AI practice | 6 client AI applications live under a written reference architecture, each with a roadmap, service level and health metrics |
@@ -612,7 +629,7 @@ Claims (each written publicly as `- <claim> [confirmed]`):
 
 Gaps (each written publicly as `- <gap>`):
 
-| Deployment | Gap (exact text) |
+| Engagement | Gap (exact text) |
 |---|---|
 | Independent AI practice | Client-attributable before and after metrics per engagement |
 | Health IT vendor, AI portfolio | Market-signal volume for the competitive intelligence capability |
@@ -642,7 +659,7 @@ Builder: one Aside subagent. No model call inside repository code.
 None. No step invokes a skill.
 
 ## 19. Agent Workspace
-Single-file mode. The repository keeps its existing `AGENTS.md` and `.github/copilot-instructions.md`
+Single-file mode. The repository keeps its existing `AGENTS.md` (plus one bridge line, §19.2) and `.github/copilot-instructions.md`
 unchanged; step 1 adds `CLAUDE.md` (§19.1). §19.3 is for the builder session only and is not
 committed.
 
@@ -652,7 +669,9 @@ Destination `CLAUDE.md`, written verbatim in step 1:
 # CLAUDE.md — fde-portfolio
 
 ## Commands (run from the repo root)
-- Setup: `uv venv -p 3.12 /tmp/fde-py312 && uv pip install --python /tmp/fde-py312/bin/python -e '.[dev]'`
+- Setup (same as §10b): `test -x /tmp/fde-py312/bin/python || uv venv -p 3.12 /tmp/fde-py312`, then
+  `/tmp/fde-py312/bin/python -c 'import sys; assert sys.version_info[:2] == (3, 12), sys.version'`, then
+  `uv pip install --python /tmp/fde-py312/bin/python -e '.[dev]'`
 - Lint: `/tmp/fde-py312/bin/ruff check .`
 - Tests: `/tmp/fde-py312/bin/python -m pytest -q`
 - Playbook gate: `/tmp/fde-py312/bin/fde-portfolio check`
@@ -673,7 +692,8 @@ Destination `CLAUDE.md`, written verbatim in step 1:
 ```
 
 ### 19.2 `AGENTS.md`
-Unchanged existing file (bridge file; points to `bash scripts/smoke.sh`). Step 1 does not edit it.
+Existing bridge file; its lines stay unchanged. Step 1 appends one line, `Build, lint, test and eval commands: see CLAUDE.md (canonical).`, verified by `cmp`
+against the base file plus that line.
 
 ### 19.3 `.claude/settings.json`
 Builder-session allowlist, not committed. Activation, before §10 Bootstrap: an unattended
@@ -701,6 +721,9 @@ denied: rollback and venv recreation are operator actions approved per run.
       "Bash(uv venv -p 3.12 /tmp/fde-py312)",
       "Bash(uv pip install --python /tmp/fde-py312/bin/python -e '.[dev]')",
       "Bash(git add:*)",
+      "Bash(git show 15cba0fbc6bf08dfabd060b1ab1e97d0512d22ba:AGENTS.md)",
+      "Bash(printf:*)",
+      "Bash(cmp:*)",
       "Bash(git commit -m:*)",
       "Bash(git tag step-01-workspace)",
       "Bash(git tag step-02-eval-set)",
@@ -736,6 +759,11 @@ denied: rollback and venv recreation are operator actions approved per run.
       "Bash(test \"$(git diff --cached --name-only:*)",
       "Bash(test \"$rc\" -eq 1)",
       "Bash(git diff --exit-code HEAD -- docs/worked-engagement/runs)",
+      "Bash(git diff --exit-code HEAD -- pyproject.toml)",
+      "Bash(python3 docs/worked-engagement/run_eval.py)",
+      "Bash(PATH=/tmp/fde-py312/bin:$PATH python3 --version)",
+      "Bash(PATH=/tmp/fde-py312/bin:$PATH python3 docs/worked-engagement/run_eval.py)",
+      "Bash(git diff --exit-code -- docs/worked-engagement/runs)",
       "Bash(echo:*)",
       "Bash(set -euo pipefail)",
       "Bash(exit 1)",
@@ -800,11 +828,10 @@ Runbook literal (`docs/runbook.md`, exact bytes, one trailing LF):
 Requires Python 3.10 or newer, standard library only.
 
 ```bash
-python3 docs/worked-engagement/run_eval.py
-git diff --exit-code HEAD -- docs/worked-engagement/runs
+python3 docs/worked-engagement/run_eval.py && git diff --exit-code HEAD -- docs/worked-engagement/runs
 ```
 
-The second command exits 0 when the rerun reproduces the results committed at `HEAD` byte for byte.
+The command exits 0 only when the eval succeeds and the rerun reproduces the results committed at `HEAD` byte for byte.
 
 ## Change the eval set or a field-record fact
 
@@ -924,6 +951,8 @@ improved `accuracy=0.8529 answered_accuracy=1.0000 coverage=0.8529 wrong_auto_ro
 |---|---|---|---|
 | `eval-set.jsonl` bytes | §19.6 frozen fixture | step 2 test, SHA-256 equals `dae205e9367083d71fb820a1a68ecb9755c4c2f0b03d7763ed50598714cc62d5` | yes, digest computed from the fixture source |
 | `systems.py` bytes | §19.6 frozen module | step 4 test, SHA-256 equals `da5cc479476a48ace90d5619297530687145e574c16b762ccc760b983ef2f3a7` | yes, digest computed from the module source |
+| `CLAUDE.md` bytes | §19.1 block, UTF-8, one trailing LF | step 1 Verify, SHA-256 equals `83a6bd88c7b1759801a38c726daa94bf48633960567204fd8e08a5b5c8d9d887` | yes |
+| `AGENTS.md` bytes | base-commit `AGENTS.md` plus the line `Build, lint, test and eval commands: see CLAUDE.md (canonical).` and one LF | step 1 Verify, `cmp` | yes |
 | SYNTHETIC banner | step 6 literal | step 6 test, line 3 string equality | yes |
 | `docs/field-record.md` bytes | `render(CARDS)` from §14 literals | step 7 test (f), byte equality incl. CRLF mutation | yes |
 | operating-record paragraph | §19.6 literal | step 10 test (d), string equality | yes |
@@ -975,16 +1004,18 @@ in the engagement README are compared against the run files by step 6's test.
 | smoke script | `scripts/smoke.sh` | §3 | step 10, §19.1, §19.3, §20.1 | yes |
 | run output line | `f"{d['system']} accuracy={d['accuracy']:.4f} answered_accuracy={d['answered_accuracy']:.4f} coverage={d['coverage']:.4f} wrong_auto_routes={d['wrong_auto_routes']}"` | §5 | step 5 | yes |
 | results row | `f"\| {d['system']} \| {d['accuracy']:.4f} \| {d['answered_accuracy']:.4f} \| {d['coverage']:.4f} \| {d['wrong_auto_routes']} \|"` | step 6 Do | step 6 test (Results-section check) | yes |
-| SYNTHETIC banner | `> SYNTHETIC. Fictional company, fictional tickets. Every number below is produced by run_eval.py.` | step 6 | none | yes |
+| SYNTHETIC banner | `> SYNTHETIC. Fictional company, fictional tickets. Every result in the table below is produced by run_eval.py.` | step 6 | none | yes |
 | README headings | `## Field record`, `## Worked engagement (synthetic)`, `## Quick start` | step 10 | §1 target | yes |
 | README links | `[docs/field-record.md](docs/field-record.md)`, `[docs/worked-engagement/README.md](docs/worked-engagement/README.md)` | step 10 | none | yes |
 | no-new-image rule | only the three base badge lines contain `![` | step 10 test (a) | §1 target, Non-Goals, §15 | yes |
 | runner output flag | `--out DIR` | §5 | step 5 Do, step 5 test (a) argv `"--out"` | yes |
 | public rerun command | `python3 docs/worked-engagement/run_eval.py` | step 6 Do | step 6 test, §19.6 runbook literal | yes |
 | pytest src path | `pythonpath = ["src"]` | §19.6 block | §19.6 resolution matrix | yes |
-| field-record section literal | §19.6 field-record section literal | §19.6 | step 10 Do, step 10 test (c) | yes |
-| engagement section literal | §19.6 engagement section literal | §19.6 | step 10 Do, step 10 test (c) | yes |
-| runbook literal | §19.6 runbook literal | §19.6 | step 8 Do, step 8 test | yes |
+| field-record section literal | `Every claim in [docs/field-record.md](docs/field-record.md) is confirmed against the maintainer's private career record, employers appear as sector pseudonyms, and the gaps are listed rather than filled.` | §19.6 | step 10 Do, step 10 test (c) | yes |
+| engagement section literal | `[docs/worked-engagement/README.md](docs/worked-engagement/README.md) is a synthetic ticket-routing engagement: a frozen 34-item eval set, a baseline and an improved router, and results that one command reproduces byte for byte.` | §19.6 | step 10 Do, step 10 test (c) | yes |
+| runbook literal | `docs/runbook.md` bytes = the fenced `markdown` block under "Runbook literal" in §19.6, first line `# Runbook` | §19.6 | step 8 Do, step 8 test | yes |
+| reader runtime requirement | `Requires Python 3.10 or newer, standard library only.` | step 6 Do (`## Rerun`) | §19.6 runbook literal, step 6 test | yes |
+| AGENTS.md bridge line | `Build, lint, test and eval commands: see CLAUDE.md (canonical).` | step 1 Do | step 1 Verify, gate G, §19.2 | yes |
 | census pattern | `\b\d[\d,]*\s*(?:-\|\s)?(?:\w+\s+){0,2}repo(?:s\|sitory\|sitories)?\b` | step 10 test (d) | none | yes |
 | build python | `/tmp/fde-py312/bin/python` | §10b | every Verify, §19.1, §19.3, §20.1 | yes |
 | build ruff | `/tmp/fde-py312/bin/ruff` | §19.1 | every Verify, §19.3, §20.1 | yes |
@@ -1003,9 +1034,13 @@ in the engagement README are compared against the run files by step 6's test.
 | smoke input 3 | `docs/evaluation-strategy.md` | `scripts/smoke.sh` (base) | §3 existing inputs, step 10 fixture | yes |
 | smoke input 4 | `docs/public-boundary.md` | `scripts/smoke.sh` (base) | §3 existing inputs, step 10 fixture | yes |
 | hygiene test | `tests/test_repo_hygiene.py` | §3 existing inputs | step 10 Do | yes |
+| isolated runner | `"$d/we/run_eval.py"` | gate G (step 5 on) | §20.1, §19.3 | yes |
+| isolated baseline run | `"$d/we/runs/baseline.json"` | gate G (step 5 on) | §20.1 | yes |
+| isolated improved run | `"$d/we/runs/improved.json"` | gate G (step 5 on) | §20.1 | yes |
+| repeatable setup sequence | `test -x /tmp/fde-py312/bin/python \|\| uv venv -p 3.12 /tmp/fde-py312`; version assert; `uv pip install --python /tmp/fde-py312/bin/python -e '.[dev]'` | §10b | §19.1 Setup, §20.1 bootstrap rerun, §19.3 | yes |
 | bridge file | `AGENTS.md` | §19.2 | §19 intro, §19.1 rules | yes |
 | field-record legend | `Every claim below is [confirmed] against the maintainer's private career record. Employers and clients appear as sector pseudonyms. Gaps are listed, not filled.` | §14 | step 7 `CARDS`/`render` | yes |
-| field-record table header | `\| Deployment \| Years \| Sector \|` | step 7 | §14 table | yes |
+| field-record table header | `\| Engagement \| Years \| Sector \|` | step 7 | §14 table | yes |
 | field-record card labels | `**Evidence.**`, `**Not yet evidenced.**` | step 7 | none | yes |
 | claim 1 (Independent AI practice) | `8 client engagements since 2025` | §14 claims table | step 7 `CARDS`, rendered `docs/field-record.md` | yes |
 | claim 2 (Independent AI practice) | `6 client AI applications live under a written reference architecture, each with a roadmap, service level and health metrics` | §14 claims table | step 7 `CARDS`, rendered `docs/field-record.md` | yes |
@@ -1045,7 +1080,7 @@ in the engagement README are compared against the run files by step 6's test.
 
 ### 20.1 Global acceptance gate
 Run as one script under `set -euo pipefail`; the first nonzero status fails the gate. It checks each
-of the 21 unique Touches paths individually for tracking and, with `git check-ignore --no-index`,
+of the 22 unique Touches paths individually for tracking and, with `git check-ignore --no-index`,
 requires exit status exactly 1 (no `.gitignore` rule matches).
 ```bash
 set -euo pipefail
@@ -1054,6 +1089,8 @@ set -euo pipefail
 /tmp/fde-py312/bin/fde-portfolio check                                     # expect: exit 0
 bash scripts/smoke.sh                                             # expect: exit 0
 test -z "$(git status --porcelain)"   # expect: exit 0, clean checkout
+git ls-files --error-unmatch AGENTS.md   # expect: exit 0
+rc=0; git check-ignore --no-index -q -- AGENTS.md || rc=$?; test "$rc" -eq 1   # expect: exit 0, no ignore rule matches
 git ls-files --error-unmatch CLAUDE.md   # expect: exit 0
 rc=0; git check-ignore --no-index -q -- CLAUDE.md || rc=$?; test "$rc" -eq 1   # expect: exit 0, no ignore rule matches
 git ls-files --error-unmatch pyproject.toml   # expect: exit 0
@@ -1102,10 +1139,20 @@ cmp "$d/we/runs/baseline.json" docs/worked-engagement/runs/baseline.json   # exp
 cmp "$d/we/runs/improved.json" docs/worked-engagement/runs/improved.json   # expect: exit 0, file created and equal
 git diff --exit-code HEAD -- docs/worked-engagement/runs   # expect: exit 0, rerun equals committed bytes
 for t in step-01-workspace step-02-eval-set step-03-score step-04-systems step-05-runs step-06-engagement-readme step-07-field-record step-08-ops-docs step-09-adrs step-10-readme; do git rev-parse -q --verify "refs/tags/$t^{commit}" >/dev/null || exit 1; done   # expect: exit 0, all ten tags resolve
+# Bootstrap rerun (§10b, executable)
+test -x /tmp/fde-py312/bin/python || uv venv -p 3.12 /tmp/fde-py312
+/tmp/fde-py312/bin/python -c 'import sys; assert sys.version_info[:2] == (3, 12), sys.version'
+uv pip install --python /tmp/fde-py312/bin/python -e '.[dev]'
+/tmp/fde-py312/bin/python -m pytest -q   # expect: exit 0, 0 failed
+git diff --exit-code HEAD -- pyproject.toml   # expect: exit 0, manifest unchanged by the rerun
+/tmp/fde-py312/bin/fde-portfolio check   # expect: exit 0, installed CLI works after the rerun
 ```
-Bootstrap re-run: running §10b again after the build exits 0 on every line (§10a is one-time and is not rerun).
 
-Post-build launch checklist (not gates): the owner adds hero media under the H1 in a later commit;
+
+Post-build launch checklist (not gates, per `docs/public-boundary.md`): `flag-gate.sh` PASS (the
+maintainer's approved copy, outside this repository); a human review of history and large blobs; the
+README keeps a Public Boundary section; no deploy keys or webhooks copied; the owner adds hero media
+under the H1 in a later commit;
 Mike approves the push of the branch.
 
 ### 20.2 Risk register
